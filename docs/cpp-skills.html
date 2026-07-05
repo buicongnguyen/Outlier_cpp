@@ -53,6 +53,8 @@
     .bar-btn.secondary:hover { border-color:var(--accent); color:var(--accent-strong); background:var(--accent-soft); }
     .source-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
     .source-grid article { padding:14px; margin-bottom:0; }
+    .quiz-card .snippet { margin:0 0 12px; font-size:13px; }
+    .quiz-card .snippet .blank { color:var(--warn); font-weight:700; }
   </style>
 </head>
 <body>
@@ -78,8 +80,10 @@
         areas: the C++ language and memory model, object-oriented design, and application architecture with
         the common toolchain and ecosystem. Each section has a definitions list, core-concept cards with
         tradeoffs and pitfalls, ASCII diagrams and code walkthroughs where a picture helps, further-reading
-        links, and a bank of practice questions with explanations in three formats: classic single-answer,
-        select-all-that-apply (the whole set must match), and click-the-steps-in-order design chains.
+        links, and a bank of practice questions with explanations in four formats: classic single-answer,
+        select-all-that-apply (the whole set must match), click-the-steps-in-order design chains, and
+        fill-in-the-blank code — a short program or build setting with a piece missing, where you pick the
+        line that correctly completes it.
         Difficulty runs from recall up to applied reasoning; questions tagged <em>senior+</em> target
         senior/principal-level judgment — production diagnosis, ABI and API evolution under compatibility
         constraints, and concurrency tradeoffs.
@@ -129,6 +133,13 @@
         <div><dt>std::vector growth</dt><dd>Contiguous array that reallocates when capacity is exceeded — geometric growth gives amortized O(1) push_back, but every reallocation invalidates all iterators, pointers, and references into it.</dd></div>
         <div><dt>Initialization</dt><dd>Uninitialized locals of built-in type hold garbage (reading them is UB). Brace initialization <code>T x{...}</code> value-initializes and rejects narrowing conversions; member initializer lists construct members directly.</dd></div>
         <div><dt>Exceptions</dt><dd><code>throw</code> unwinds the stack running destructors (why RAII makes exception safety automatic); catch by <code>const&amp;</code>. Destructors must not throw during unwinding.</dd></div>
+        <div><dt>lvalue / rvalue</dt><dd>An lvalue is a named, addressable object; an rvalue is a temporary (or something cast to one). Which category an expression has decides what binds to it — rvalues bind to <code>T&amp;&amp;</code> and may be moved from; lvalues need <code>std::move</code> to opt in.</dd></div>
+        <div><dt>The four named casts</dt><dd><code>static_cast</code> (checked-at-compile-time conversions), <code>dynamic_cast</code> (checked-at-runtime downcast, needs a polymorphic type), <code>const_cast</code> (add/remove const — using it to actually write is usually UB), <code>reinterpret_cast</code> (bit reinterpretation, last resort). C-style casts silently pick one for you — avoid.</dd></div>
+        <div><dt>enum class</dt><dd>Scoped enumeration: enumerators live inside the type (<code>Color::red</code>) and do not implicitly convert to int. Fixes the classic unscoped-enum bugs — name collisions and accidental arithmetic.</dd></div>
+        <div><dt>noexcept</dt><dd>A promise the function does not throw; violating it calls std::terminate. Matters for performance too: vector only <em>moves</em> elements during growth if the move constructor is noexcept — otherwise it copies for safety.</dd></div>
+        <div><dt>std::optional</dt><dd>A maybe-value without sentinels or heap: <code>optional&lt;int&gt; parse(string_view)</code> makes 'no result' a typed, checkable state instead of -1, nullptr, or an out-parameter flag.</dd></div>
+        <div><dt>Structured bindings</dt><dd><code>auto [key, value] : map</code> — unpack pairs, tuples, and aggregate structs into named locals. Removes the .first/.second noise from map iteration.</dd></div>
+        <div><dt>RTTI</dt><dd>Run-time type information: what <code>typeid</code> and <code>dynamic_cast</code> consult, stored alongside the vtable for polymorphic types. Some codebases disable it (-fno-rtti) for size; frequent dynamic_cast is usually a design smell regardless.</dd></div>
       </dl>
 
       <h3 class="sub">Core concepts</h3>
@@ -245,6 +256,12 @@ additions separately and append after the loop.</pre>
         <div><dt>operator overloading / &lt;=&gt;</dt><dd>Value types define <code>==</code> and (C++20) the spaceship <code>&lt;=&gt;</code> to get all comparisons consistently — often just <code>= default</code>, comparing member by member.</dd></div>
         <div><dt>explicit</dt><dd>Blocks single-argument constructors from acting as implicit conversions (<code>void f(Meters m); f(5);</code> compiling silently is how unit bugs are born). Default for single-arg constructors.</dd></div>
         <div><dt>Immutability</dt><dd><code>const</code> objects and members: safe to share across threads (the standard library assumes const = thread-safe reads), safe as map keys, trivially cacheable.</dd></div>
+        <div><dt>final</dt><dd>On a class: no further inheritance. On a virtual function: no further overriding. Documents design intent and lets the optimizer devirtualize calls it can prove.</dd></div>
+        <div><dt>Multiple inheritance / diamond</dt><dd>A class may have several bases. When two bases share a grandparent, the grandparent is duplicated unless inherited <code>virtual</code>ly. Sane convention: inherit one implementation class at most, plus any number of pure interfaces.</dd></div>
+        <div><dt>NVI idiom</dt><dd>Non-Virtual Interface: public non-virtual methods call private virtual hooks. The base class controls the contract (pre/postconditions, locking, logging) while derived classes customize only the hook.</dd></div>
+        <div><dt>friend</dt><dd>Grants a named function or class access to private members — for symmetric operators and tightly-coupled pairs (container/iterator). A wide friend list is encapsulation giving up.</dd></div>
+        <div><dt>Downcasting</dt><dd><code>dynamic_cast&lt;Derived*&gt;(basePtr)</code> — a runtime-checked walk down the hierarchy (nullptr on failure). Occasional use is fine; a switch on types via dynamic_cast means a virtual function is missing from the interface.</dd></div>
+        <div><dt>Covariant returns</dt><dd>An override may return <code>Derived*</code>/<code>Derived&amp;</code> where the base returns <code>Base*</code>/<code>Base&amp;</code> — the classic use is <code>clone()</code> returning the concrete type.</dd></div>
       </dl>
 
       <h3 class="sub">Core concepts</h3>
@@ -363,6 +380,13 @@ std::variant + std::visit: closed set of types, no heap, exhaustive switch.</pre
         <div><dt>condition_variable</dt><dd>Sleep until a predicate holds: <code>cv.wait(lock, []{ return !queue.empty(); })</code> — always with a predicate (spurious wakeups) and under the mutex guarding the state.</dd></div>
         <div><dt>Exceptions vs expected</dt><dd>Exceptions for rare, non-local failures (RAII makes propagation safe); <code>std::optional</code>/<code>std::expected</code> (C++23) for expected, local failures — the error is in the return type, visible at every call site.</dd></div>
         <div><dt>Warnings as errors</dt><dd><code>-Wall -Wextra -Werror</code> (or /W4 /WX): the compiler catches shadowing, narrowing, missing returns, unused results. The cheapest static analysis there is.</dd></div>
+        <div><dt>C++20 modules</dt><dd><code>import</code> instead of textual <code>#include</code>: compiled once, no macro leakage, faster builds in principle. Toolchain and build-system support is still uneven — headers remain the deployed reality in most codebases.</dd></div>
+        <div><dt>LTO</dt><dd>Link-Time Optimization: the optimizer sees all TUs together at link, enabling cross-file inlining and dead-code elimination. Slower links, faster binaries; common for release builds (-flto).</dd></div>
+        <div><dt>Debug vs release builds</dt><dd>Debug: -O0 -g, assertions on — debuggable, slow. Release: -O2/-O3 -DNDEBUG — fast, asserts gone. Bugs that appear only in release are a UB smell; RelWithDebInfo keeps symbols for profiling production-like builds.</dd></div>
+        <div><dt>std::async / future</dt><dd>Task-level parallelism: <code>auto f = std::async(std::launch::async, work);</code> runs work on another thread; <code>f.get()</code> joins and returns the result (or rethrows its exception). Simpler than raw threads for one-shot tasks.</dd></div>
+        <div><dt>False sharing</dt><dd>Two threads writing different variables that share a 64-byte cache line ping-pong the line between cores — a silent scalability killer for adjacent counters. Fix: <code>alignas(64)</code> / padding per-thread data.</dd></div>
+        <div><dt>Microbenchmarking</dt><dd>Google Benchmark and friends: statistically repeated timing of small hot paths. Chief trap: the optimizer deleting the work you meant to measure — use DoNotOptimize, and confirm findings in a real profile.</dd></div>
+        <div><dt>Symbol visibility</dt><dd>Shared libraries default to exporting everything; <code>-fvisibility=hidden</code> plus explicit export macros shrinks the ABI surface, speeds loading, and keeps internals legally changeable.</dd></div>
       </dl>
 
       <h3 class="sub">Core concepts</h3>
@@ -523,13 +547,25 @@ function updateScore() {
   }
 }
 
+function appendSnippet(card, code) {
+  const pre = el("pre", "diagram snippet");
+  const parts = code.split("____");
+  parts.forEach((part, i) => {
+    pre.appendChild(document.createTextNode(part));
+    if (i < parts.length - 1) pre.appendChild(el("span", "blank", "____"));
+  });
+  card.appendChild(pre);
+}
+
 function renderQuestion(container, item, number, sectionKey) {
   if (item.type === "multi") return renderMulti(container, item, number, sectionKey);
   if (item.type === "order") return renderOrder(container, item, number, sectionKey);
   const card = el("article", "quiz-card");
   const title = el("p", "q", `Q${number}. ${item.q}`);
+  if (item.type === "code") title.appendChild(el("span", "qtype-tag", "fill in the blank"));
   if (item.level) title.appendChild(el("span", "level-tag", "senior+"));
   card.appendChild(title);
+  if (item.code) appendSnippet(card, item.code);
   const optionsBox = el("div", "options");
   const explain = el("div", "explain");
   explain.appendChild(document.createTextNode(item.explain));

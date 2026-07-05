@@ -320,6 +320,54 @@ const quizData = {
         "Add a regression test and keep the suite running under ASan in CI"
       ],
       explain: "ASan's three stacks (use, free, allocation) turn use-after-free from a heisenbug into a readable story: two parts of the code disagreed about who owned the object and for how long. Patching the symptom (moving the free) leaves the disagreement in place; encoding ownership in types removes the bug class."
+    },
+    {
+      type: "code",
+      q: "This setter stores its sink parameter. Which expression completes it best?",
+      code: "class User {\n  std::string name_;\npublic:\n  void setName(std::string n) {\n    name_ = ____;\n  }\n};",
+      options: [
+        ["std::move(n)", true],
+        ["n  (compiles, but pays an unnecessary extra copy)", false],
+        ["&n", false],
+        ["n.release()", false]
+      ],
+      explain: "The by-value-then-move sink idiom: n is the function's own copy (or was move-constructed from a temporary), so its guts can be stolen — 'name_ = std::move(n);' is a cheap pointer swap. Plain 'n' copies the buffer a second time. '&n' assigns a pointer to a string (compile error), and std::string has no release()."
+    },
+    {
+      type: "code",
+      q: "The loop must not copy each (large) element and must not modify them. Which declaration completes it?",
+      code: "std::vector<BigRecord> records = load();\nfor (____ rec : records) {\n  process(rec);\n}",
+      options: [
+        ["const auto&", true],
+        ["auto  (copies every element)", false],
+        ["auto*", false],
+        ["const auto  (still copies every element)", false]
+      ],
+      explain: "Range-for declares a fresh variable per element: plain 'auto' (with or without const) copy-constructs every BigRecord — a silent performance bug. 'const auto&' binds directly to each element, no copy, read-only. 'auto*' does not compile (elements are objects, not pointers). For mutation you would use 'auto&'."
+    },
+    {
+      type: "code",
+      q: "The callback outlives this function — it runs later from a task queue. Which capture is correct?",
+      code: "void schedule(TaskQueue& q) {\n  std::string payload = buildPayload();\n  q.push([____] { send(payload); });\n}  // returns before the task runs",
+      options: [
+        ["payload  (capture by value — the lambda owns a copy)", true],
+        ["&payload  (dangles: the local dies when schedule returns)", false],
+        ["&  (same dangling reference, spelled implicitly)", false],
+        ["  (empty capture list)", false]
+      ],
+      explain: "The lambda escapes the scope, so by-reference captures dangle — stack-use-after-return, UB the moment the task runs. Capturing by value copies payload into the closure, which owns it for as long as the task lives; 'payload = std::move(payload)' would avoid even that copy. An empty capture list does not compile here (payload is used inside)."
+    },
+    {
+      type: "code",
+      q: "The goal is a vector containing ten zero-valued ints. Which initializer is correct?",
+      code: "std::vector<int> v____;\nassert(v.size() == 10 && v[0] == 0);",
+      options: [
+        ["(10)", true],
+        ["{10}  (one element with value 10)", false],
+        ["[10]", false],
+        ["= 10", false]
+      ],
+      explain: "For containers, braces mean initializer_list: {10} builds a one-element vector holding 10 — the assert fails on size(). Parentheses select the count constructor: (10) gives ten value-initialized (zero) ints. This paren-vs-brace trap is specific to types with initializer_list constructors; for most other types braces are the safer default."
     }
   ],
   ood: [
@@ -639,6 +687,54 @@ const quizData = {
         "Add the new state as Impl members — future internal changes no longer touch the public header"
       ],
       explain: "PIMPL fixes the class's size at one pointer, so internals can evolve without breaking consumers' compiled layout assumptions. The out-of-line destructor is mandatory (unique_ptr must see the complete Impl to delete it). Verification belongs in CI: ABI stability is a property you check, not assume. One-time cost: an allocation and an indirection per object."
+    },
+    {
+      type: "code",
+      q: "This interface will be owned and deleted through base pointers. What completes it?",
+      code: "struct Logger {\n  virtual void log(std::string_view msg) = 0;\n  ____\n};\n\nstd::unique_ptr<Logger> logger = makeFileLogger();",
+      options: [
+        ["virtual ~Logger() = default;", true],
+        ["~Logger() = default;  (non-virtual: deleting via Logger* is UB)", false],
+        ["Logger() = delete;", false],
+        ["void ~Logger() override;", false]
+      ],
+      explain: "unique_ptr<Logger> deletes through the base pointer, so the destructor must be virtual — otherwise the derived destructor never runs (UB, leaked resources). 'virtual ~Logger() = default;' is the one-line interface staple. Deleting the constructor would make the class unusable; destructors have no return type and nothing to override here."
+    },
+    {
+      type: "code",
+      q: "Dog must replace Animal's virtual speak(). Which keyword completes the declaration safely?",
+      code: "struct Animal {\n  virtual std::string speak() const { return \"...\"; }\n  virtual ~Animal() = default;\n};\nstruct Dog : Animal {\n  std::string speak() const ____ { return \"Woof\"; }\n};",
+      options: [
+        ["override", true],
+        ["virtual  (not legal in that position; and adds no checking anyway)", false],
+        ["new", false],
+        ["= 0", false]
+      ],
+      explain: "'override' asks the compiler to verify a matching virtual base function exists — if the signature drifted (missing const, wrong parameter), you get an error instead of a silent new function that base-typed callers never reach. 'virtual' belongs before the return type and performs no such check; 'new' is C#'s hiding keyword, not C++; '= 0' would make Dog abstract with no body allowed there."
+    },
+    {
+      type: "code",
+      q: "OrderService should follow dependency inversion and be testable with a fake. Which parameter type completes the constructor?",
+      code: "class OrderService {\npublic:\n  explicit OrderService(____ gateway) : gateway_(gateway) {}\nprivate:\n  PaymentGateway& gateway_;   // PaymentGateway is a pure-virtual interface\n};",
+      options: [
+        ["PaymentGateway&", true],
+        ["PaymentGateway  (by value: abstract — will not compile; and would slice)", false],
+        ["StripeGateway&  (couples the service to one concrete provider)", false],
+        ["const PaymentGateway", false]
+      ],
+      explain: "The service depends on the abstraction, injected by reference: main() wires the real StripeGateway, tests pass a FakeGateway — no framework needed. By-value parameters cannot work: the interface is abstract, and even a concrete base would slice. Naming StripeGateway defeats DIP — high-level code would again depend on a detail."
+    },
+    {
+      type: "code",
+      q: "SocketConn owns a raw handle and is movable. Which signature completes the move constructor?",
+      code: "class SocketConn {\n  int fd_;\npublic:\n  SocketConn(____ other) noexcept\n    : fd_(other.fd_) { other.fd_ = -1; }\n};",
+      options: [
+        ["SocketConn&&", true],
+        ["const SocketConn&  (that is the copy constructor — and it could not null the source)", false],
+        ["SocketConn&", false],
+        ["SocketConn*", false]
+      ],
+      explain: "A move constructor takes an rvalue reference (SocketConn&&) so it binds to temporaries and std::move-d objects, steals the handle, and nulls the source — noexcept so vector growth will actually move. const& is copy (and const forbids modifying other.fd_); plain & would hijack ordinary lvalue construction; a pointer parameter is not a constructor the language ever calls implicitly."
     }
   ],
   arch: [
@@ -955,6 +1051,54 @@ const quizData = {
         "Land the fix with a stress regression test, and keep a TSan job in CI to catch the next one"
       ],
       explain: "Flaky-in-CI plus concurrency is a race until proven otherwise. Rerunning until green ships the bug. The order matters: reproduce first (else you cannot verify any fix), let TSan name the exact accesses (else you fix a guess), fix ownership rather than sprinkling one lock on the symptom, and institutionalize the check so the class of bug stays caught."
+    },
+    {
+      type: "code",
+      q: "app uses the fmt library found via find_package. Which command completes the CMakeLists?",
+      code: "find_package(fmt CONFIG REQUIRED)\nadd_executable(app src/main.cpp)\n____(app PRIVATE fmt::fmt)",
+      options: [
+        ["target_link_libraries", true],
+        ["link_directories  (legacy global state, wires nothing to the target)", false],
+        ["add_dependencies  (build ordering only — no include paths or linking)", false],
+        ["target_compile_options", false]
+      ],
+      explain: "target_link_libraries against the imported fmt::fmt target pulls in everything as usage requirements — include paths, the library to link, any needed flags. That target-based propagation is the core of modern CMake. link_directories/include_directories are the legacy global style; add_dependencies only sequences builds; compile options are the wrong category."
+    },
+    {
+      type: "code",
+      q: "This small function lives in a header included by many .cpp files. Which keyword keeps the linker happy?",
+      code: "// mathutil.h  (included by a.cpp, b.cpp, c.cpp ...)\n____ int clamp01(int v) {\n  return v < 0 ? 0 : (v > 1 ? 1 : v);\n}",
+      options: [
+        ["inline", true],
+        ["extern  (declares external linkage — every TU still defines it: multiple definition)", false],
+        ["virtual", false],
+        ["volatile", false]
+      ],
+      explain: "A function defined in a header is compiled into every including TU; at link time that is 'multiple definition of clamp01' — an ODR violation. 'inline' relaxes the ODR: identical definitions per TU are permitted and merged. (This is also why templates and in-class member function bodies are legal in headers — they are implicitly inline.) virtual applies to member functions; volatile applies to objects."
+    },
+    {
+      type: "code",
+      q: "A consumer thread must sleep until the queue has work. What completes the wait correctly?",
+      code: "std::unique_lock lock(mu);\ncv.wait(lock, ____);\nauto item = queue.front();  // must be safe here",
+      options: [
+        ["[&] { return !queue.empty(); }", true],
+        ["[] { return true; }  (returns immediately — even when the queue is empty)", false],
+        ["std::chrono::seconds(1)", false],
+        ["&queue", false]
+      ],
+      explain: "The predicate form re-checks the condition under the lock after every wakeup, which is mandatory: wakeups can be spurious, and another consumer may have emptied the queue between notify and wake. A predicate of 'true' waits for nothing; a duration belongs to wait_for (still with a predicate!); a pointer to the queue is not a callable condition."
+    },
+    {
+      type: "code",
+      q: "CI should catch a suspected use-after-free in the test binary. Which flag completes the build line?",
+      code: "g++ -g -O1 ____ tests.cpp -o tests && ./tests",
+      options: [
+        ["-fsanitize=address", true],
+        ["-fsanitize=thread  (data races — a different job; cannot combine with ASan)", false],
+        ["-O3 -DNDEBUG", false],
+        ["-Wall -Werror  (static warnings — cannot see runtime lifetime errors)", false]
+      ],
+      explain: "AddressSanitizer instruments memory accesses and reports use-after-free at the moment it happens, with allocation and free stacks. Warnings are compile-time and rarely see lifetime bugs across functions; optimization flags change nothing about detection; TSan is the right tool for races but the wrong one here, and ASan+TSan cannot run in one binary — hence separate CI jobs."
     }
   ]
 };
