@@ -55,6 +55,27 @@
     .source-grid article { padding:14px; margin-bottom:0; }
     .quiz-card .snippet { margin:0 0 12px; font-size:13px; }
     .quiz-card .snippet .blank { color:var(--warn); font-weight:700; }
+    .fig { margin:14px 0 0; padding:12px 14px; background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); overflow-x:auto; }
+    .fig svg { display:block; width:100%; height:auto; min-width:660px; max-width:880px; margin:0 auto; font-family:"Segoe UI",system-ui,sans-serif; }
+    .fig text { font-size:13px; fill:var(--text); }
+    .fig .tm { font-family:Consolas,Menlo,monospace; font-size:12.5px; }
+    .fig .tmu { fill:var(--muted); font-size:12px; }
+    .fig .tac { fill:var(--accent-strong); font-weight:700; }
+    .fig .twn { fill:var(--warn); font-weight:700; }
+    .fig .tb { font-weight:700; }
+    .fig .nd { fill:var(--bg); stroke:var(--line); stroke-width:1.2; }
+    .fig .nda { fill:var(--accent-soft); stroke:var(--accent); stroke-width:1.2; }
+    .fig .ndw { fill:var(--warn-soft); stroke:var(--warn); stroke-width:1.2; }
+    .fig .ln { stroke:var(--muted); fill:none; stroke-width:1.5; }
+    .fig .lna { stroke:var(--accent); fill:none; stroke-width:1.5; }
+    .fig .lnw { stroke:var(--warn); fill:none; stroke-width:1.5; }
+    .fig .dsh { stroke-dasharray:5 4; }
+    .cmp-table { width:100%; margin:14px 0 0; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); font-size:14px; }
+    .cmp-table th, .cmp-table td { padding:9px 12px; border-bottom:1px solid var(--line); border-right:1px solid var(--line); text-align:left; vertical-align:top; }
+    .cmp-table th:last-child, .cmp-table td:last-child { border-right:none; }
+    .cmp-table th { color:var(--accent-strong); font-size:12.5px; text-transform:uppercase; letter-spacing:0.3px; }
+    .cmp-table td:first-child { font-weight:700; }
+    .cmp-table tr:last-child td { border-bottom:none; }
   </style>
 </head>
 <body>
@@ -73,13 +94,19 @@
   </header>
 
   <main id="main">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+      <marker id="arm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker>
+      <marker id="ara" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker>
+      <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--warn)"/></marker>
+    </defs></svg>
     <section class="section intro">
       <h2>Study Goal</h2>
       <p>
         Revision notes and practice questions for C++ software-engineering assessment work, covering three
         areas: the C++ language and memory model, object-oriented design, and application architecture with
         the common toolchain and ecosystem. Each section has a definitions list, core-concept cards with
-        tradeoffs and pitfalls, ASCII diagrams and code walkthroughs where a picture helps, further-reading
+        tradeoffs and pitfalls, diagrams (data flow, sequence, call flow) and code walkthroughs where a
+        picture helps, further-reading
         links, and a bank of practice questions with explanations in four formats: classic single-answer,
         select-all-that-apply (the whole set must match), click-the-steps-in-order design chains, and
         fill-in-the-blank code — a short program or build setting with a piece missing, where you pick the
@@ -153,34 +180,66 @@
       </div>
 
       <p class="diagram-title">From source to CPU — the C++ compilation pipeline</p>
-      <pre class="diagram">main.cpp ──(preprocessor: #include pastes headers, macros expand)──▶ one translation unit
-                     │
-              compiler (per TU): parse ─▶ template instantiation ─▶ optimize ─▶ main.o
-                     │                                                    (object file:
-              other TUs compile independently ─▶ util.o, net.o ...         machine code +
-                     │                                                     unresolved symbols)
-              linker: resolves symbols across .o files + libraries
-                     │
-                  executable  (no VM, no JIT — this IS the machine code)
-
-undefined reference = compiled fine, linker couldn't find the definition
-redefinition / ODR  = two TUs both DEFINED the same symbol</pre>
+      <div class="fig"><svg viewBox="0 0 880 330" role="img" aria-label="C++ compilation pipeline: source files are preprocessed and compiled per translation unit into object files, then linked with libraries into a native executable">
+        <text class="tmu" x="95" y="28" text-anchor="middle">SOURCE</text>
+        <text class="tmu" x="325" y="28" text-anchor="middle">PREPROCESS + COMPILE (PER TU)</text>
+        <text class="tmu" x="545" y="28" text-anchor="middle">OBJECT FILES</text>
+        <text class="tmu" x="755" y="28" text-anchor="middle">LINK</text>
+        <rect class="nd" x="30" y="44" width="130" height="36" rx="6"/><text class="tm" x="95" y="66" text-anchor="middle">main.cpp</text>
+        <rect class="nd" x="30" y="124" width="130" height="36" rx="6"/><text class="tm" x="95" y="146" text-anchor="middle">util.cpp</text>
+        <rect class="nd" x="220" y="40" width="210" height="140" rx="6"/>
+        <text class="tb" x="325" y="64" text-anchor="middle">compiler</text>
+        <text class="tmu" x="325" y="88" text-anchor="middle">#include pasted in &#8594; one TU</text>
+        <text class="tmu" x="325" y="108" text-anchor="middle">templates instantiated here</text>
+        <text class="tmu" x="325" y="128" text-anchor="middle">optimized per TU</text>
+        <text class="tmu" x="325" y="160" text-anchor="middle">sees ONE TU at a time</text>
+        <line class="ln" x1="160" y1="62" x2="214" y2="62" marker-end="url(#arm)"/>
+        <line class="ln" x1="160" y1="142" x2="214" y2="142" marker-end="url(#arm)"/>
+        <rect class="nd" x="490" y="44" width="110" height="36" rx="6"/><text class="tm" x="545" y="66" text-anchor="middle">main.o</text>
+        <rect class="nd" x="490" y="124" width="110" height="36" rx="6"/><text class="tm" x="545" y="146" text-anchor="middle">util.o</text>
+        <rect class="nd dsh" x="490" y="204" width="110" height="36" rx="6"/><text class="tmu" x="545" y="226" text-anchor="middle">libraries</text>
+        <line class="ln" x1="430" y1="62" x2="484" y2="62" marker-end="url(#arm)"/>
+        <line class="ln" x1="430" y1="142" x2="484" y2="142" marker-end="url(#arm)"/>
+        <rect class="nda" x="660" y="84" width="190" height="56" rx="6"/>
+        <text class="tb" x="755" y="106" text-anchor="middle">linker</text>
+        <text class="tmu" x="755" y="126" text-anchor="middle">every symbol &#8594; ONE definition</text>
+        <line class="ln" x1="600" y1="62" x2="654" y2="98" marker-end="url(#arm)"/>
+        <line class="ln" x1="600" y1="142" x2="654" y2="120" marker-end="url(#arm)"/>
+        <line class="ln" x1="600" y1="222" x2="654" y2="136" marker-end="url(#arm)"/>
+        <rect class="nda" x="660" y="204" width="190" height="40" rx="6"/><text class="tm" x="755" y="228" text-anchor="middle">./app &#8212; native code</text>
+        <line class="lna" x1="755" y1="140" x2="755" y2="198" marker-end="url(#ara)"/>
+        <text class="twn" x="325" y="202" text-anchor="middle">syntax &amp; template errors surface here &#8593;</text>
+        <text class="twn" x="440" y="288" text-anchor="middle">undefined reference &#183; multiple definition (ODR) &#8594; reported by the LINKER, not the compiler</text>
+        <text class="tmu" x="440" y="312" text-anchor="middle">no VM, no JIT, no GC &#8212; the executable IS the machine code (each .cpp compiles independently; they only meet at link time)</text>
+      </svg></div>
 
       <p class="diagram-title">Value vs pointer vs reference — what assignment does</p>
-      <pre class="diagram">std::string a = "hello";
-
-std::string  b = a;    // COPY: new buffer, independent object   (value semantics)
-std::string* p = &a;   // POINTER: holds a's address, can be null/reseated
-std::string& r = a;    // REFERENCE: alias for a itself — no new object
-
-b += "!";   // a unchanged        STACK              HEAP
-r += "!";   // a IS changed       a ──────────▶ "hello!"
-                                  b ──────────▶ "hello"   (own buffer)
-                                  p ──▶ &a
-                                  r ═══ a  (same object, other name)
-
-std::string c = std::move(a);  // MOVE: c steals a's buffer pointer —
-                               // no character copied; a left empty-but-valid</pre>
+      <div class="fig"><svg viewBox="0 0 880 340" role="img" aria-label="Memory diagram comparing copy, pointer, and reference: a and b own separate heap buffers, p holds a's address, r is an alias for a">
+        <text class="tm" x="24" y="44">std::string a = "hello";</text>
+        <text class="tm" x="24" y="68">std::string  b = a;   <tspan class="tmu">// copy</tspan></text>
+        <text class="tm" x="24" y="92">std::string* p = &amp;a;  <tspan class="tmu">// pointer</tspan></text>
+        <text class="tm" x="24" y="116">std::string&amp; r = a;   <tspan class="tmu">// reference</tspan></text>
+        <text class="tm" x="24" y="140">r += "!";             <tspan class="tmu">// via the alias</tspan></text>
+        <text class="tmu" x="24" y="172">b is untouched; a changed through r</text>
+        <text class="tm" x="24" y="216">std::string c = std::move(a);</text>
+        <text class="tmu" x="24" y="240">c steals a's buffer pointer &#8212; no characters</text>
+        <text class="tmu" x="24" y="258">copied; a is left empty-but-valid</text>
+        <text class="tmu" x="495" y="28" text-anchor="middle">STACK</text>
+        <text class="tmu" x="765" y="28" text-anchor="middle">HEAP</text>
+        <rect class="nd" x="440" y="44" width="110" height="32" rx="6"/><text class="tm" x="495" y="64" text-anchor="middle">a</text>
+        <rect class="nd" x="440" y="116" width="110" height="32" rx="6"/><text class="tm" x="495" y="136" text-anchor="middle">b</text>
+        <rect class="nd" x="440" y="188" width="110" height="32" rx="6"/><text class="tm" x="495" y="208" text-anchor="middle">p = &amp;a</text>
+        <rect class="nda dsh" x="440" y="260" width="110" height="32" rx="6"/><text class="tm" x="495" y="280" text-anchor="middle">r &#8801; a</text>
+        <rect class="nda" x="680" y="44" width="170" height="32" rx="6"/><text class="tm" x="765" y="64" text-anchor="middle">"hello!"</text>
+        <text class="tmu" x="765" y="94" text-anchor="middle">a's buffer &#8212; mutated via r</text>
+        <rect class="nd" x="680" y="116" width="170" height="32" rx="6"/><text class="tm" x="765" y="136" text-anchor="middle">"hello"</text>
+        <text class="tmu" x="765" y="166" text-anchor="middle">b's own, independent buffer</text>
+        <line class="ln" x1="550" y1="60" x2="674" y2="60" marker-end="url(#arm)"/><text class="tmu" x="612" y="52" text-anchor="middle">owns</text>
+        <line class="ln" x1="550" y1="132" x2="674" y2="132" marker-end="url(#arm)"/><text class="tmu" x="612" y="124" text-anchor="middle">owns</text>
+        <path class="ln" d="M480 188 L480 82" marker-end="url(#arm)"/><text class="tmu" x="470" y="150" text-anchor="end">holds a's address</text>
+        <path class="lna dsh" d="M520 260 L520 82" marker-end="url(#ara)"/><text class="tmu" x="532" y="240">alias &#8212; same object,</text><text class="tmu" x="532" y="256">another name</text>
+        <text class="tmu" x="440" y="322">pointer: nullable, reseatable &#183; reference: bound once, never null &#183; copy: whole new object</text>
+      </svg></div>
 
       <p class="diagram-title">RAII — lifetime does the cleanup</p>
       <pre class="diagram">void process(const Path&amp; path) {
@@ -198,20 +257,47 @@ no finally, no leaks, exception-safe by construction.
 compare manual style: unlock+close duplicated on all 3 paths, and a
 throw before the cleanup line leaks the lot.</pre>
 
+      <p class="diagram-title">Exception propagation — a throw as a sequence</p>
+      <div class="fig"><svg viewBox="0 0 880 350" role="img" aria-label="Sequence diagram: main calls parse, parse calls readFile, readFile throws; the stack unwinds through readFile and parse, running destructors, until main's catch handles the exception">
+        <rect class="nd" x="70" y="16" width="140" height="32" rx="6"/><text class="tm" x="140" y="36" text-anchor="middle">main()</text>
+        <rect class="nd" x="370" y="16" width="140" height="32" rx="6"/><text class="tm" x="440" y="36" text-anchor="middle">parse()</text>
+        <rect class="nd" x="670" y="16" width="140" height="32" rx="6"/><text class="tm" x="740" y="36" text-anchor="middle">readFile()</text>
+        <line class="ln dsh" x1="140" y1="48" x2="140" y2="310" opacity="0.55"/>
+        <line class="ln dsh" x1="440" y1="48" x2="440" y2="310" opacity="0.55"/>
+        <line class="ln dsh" x1="740" y1="48" x2="740" y2="310" opacity="0.55"/>
+        <line class="ln" x1="140" y1="84" x2="434" y2="84" marker-end="url(#arm)"/><text class="tm" x="290" y="76" text-anchor="middle">parse(path)</text>
+        <line class="ln" x1="440" y1="120" x2="734" y2="120" marker-end="url(#arm)"/><text class="tm" x="590" y="112" text-anchor="middle">readFile(path)</text>
+        <rect class="ndw" x="660" y="140" width="160" height="30" rx="6"/><text class="tm" x="740" y="159" text-anchor="middle">throw FileError{..}</text>
+        <line class="lnw dsh" x1="740" y1="205" x2="446" y2="205" marker-end="url(#arw)"/>
+        <text class="twn" x="590" y="197" text-anchor="middle">unwind: readFile's locals destroyed</text>
+        <text class="tmu" x="590" y="222" text-anchor="middle">~ifstream closes the file (RAII)</text>
+        <line class="lnw dsh" x1="440" y1="252" x2="146" y2="252" marker-end="url(#arw)"/>
+        <text class="twn" x="290" y="244" text-anchor="middle">no handler here &#8212; parse's locals destroyed</text>
+        <rect class="nda" x="30" y="270" width="220" height="30" rx="6"/><text class="tm" x="140" y="289" text-anchor="middle">catch (const FileError&amp; e)</text>
+        <text class="tmu" x="440" y="332" text-anchor="middle">destructors ran in every unwound frame &#8212; locks, files, memory released automatically; no matching handler anywhere &#8594; std::terminate</text>
+      </svg></div>
+
       <p class="diagram-title">vector reallocation — why iterators dangle</p>
-      <pre class="diagram">std::vector&lt;int&gt; v = {1, 2, 3};        capacity 3, buffer at 0xA000
-auto it = v.begin();                    it ──▶ 0xA000
-
-v.push_back(4);        // full! allocate bigger buffer, move elements, free old
-
-        old buffer 0xA000: [1][2][3]   ← freed
-        new buffer 0xB000: [1][2][3][4]
-
-it still points at 0xA000 ─▶ *it is USE-AFTER-FREE (UB — may even "work")
-
-same trap: pointers/references to elements, range-for over a vector you
-push_back into.  fixes: reserve() up front, use indexes, or collect
-additions separately and append after the loop.</pre>
+      <div class="fig"><svg viewBox="0 0 880 300" role="img" aria-label="Data-flow diagram: push_back past capacity moves elements to a new buffer and frees the old one; a saved iterator still points into the freed buffer, which is use-after-free">
+        <text class="tm" x="24" y="36">std::vector&lt;int&gt; v = {1, 2, 3};  auto it = v.begin();  v.push_back(4);  <tspan class="twn">// capacity was 3!</tspan></text>
+        <text class="tmu" x="171" y="76" text-anchor="middle">old buffer @ 0xA000 &#8212; freed</text>
+        <rect class="ndw dsh" x="90" y="90" width="54" height="36"/><text class="tm" x="117" y="112" text-anchor="middle">1</text>
+        <rect class="ndw dsh" x="144" y="90" width="54" height="36"/><text class="tm" x="171" y="112" text-anchor="middle">2</text>
+        <rect class="ndw dsh" x="198" y="90" width="54" height="36"/><text class="tm" x="225" y="112" text-anchor="middle">3</text>
+        <text class="tmu" x="628" y="76" text-anchor="middle">new, bigger buffer @ 0xB000</text>
+        <rect class="nda" x="520" y="90" width="54" height="36"/><text class="tm" x="547" y="112" text-anchor="middle">1</text>
+        <rect class="nda" x="574" y="90" width="54" height="36"/><text class="tm" x="601" y="112" text-anchor="middle">2</text>
+        <rect class="nda" x="628" y="90" width="54" height="36"/><text class="tm" x="655" y="112" text-anchor="middle">3</text>
+        <rect class="nda" x="682" y="90" width="54" height="36"/><text class="tm" x="709" y="112" text-anchor="middle">4</text>
+        <line class="ln dsh" x1="258" y1="108" x2="514" y2="108" marker-end="url(#arm)"/>
+        <text class="tmu" x="386" y="100" text-anchor="middle">elements moved, old buffer freed</text>
+        <rect class="nd" x="131" y="210" width="80" height="32" rx="6"/><text class="tm" x="171" y="230" text-anchor="middle">it</text>
+        <line class="lnw" x1="171" y1="210" x2="171" y2="132" marker-end="url(#arw)"/>
+        <text class="twn" x="185" y="180">still points into freed memory &#8594; *it is USE-AFTER-FREE (UB)</text>
+        <rect class="nd" x="588" y="210" width="80" height="32" rx="6"/><text class="tm" x="628" y="230" text-anchor="middle">v</text>
+        <line class="lna" x1="628" y1="210" x2="628" y2="132" marker-end="url(#ara)"/>
+        <text class="tmu" x="440" y="278" text-anchor="middle">same trap: pointers/references to elements, range-for over a vector you push_back into &#183; fixes: reserve() up front, use indexes, or append after the loop</text>
+      </svg></div>
 
       <div class="link-list">
         <a href="https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines" target="_blank" rel="noopener">C++ Core Guidelines</a>
@@ -275,23 +361,32 @@ additions separately and append after the loop.</pre>
       </div>
 
       <p class="diagram-title">Virtual dispatch — which function actually runs</p>
-      <pre class="diagram">struct Animal { virtual std::string speak() { return "..."; }
-                virtual ~Animal() = default; };
-struct Dog : Animal { std::string speak() override { return "Woof"; } };
-
-Animal* a = new Dog;
-a-&gt;speak();                 // "Woof" — virtual: lookup through the object's vptr
-
-  a ──▶ [ vptr │ dog data ]
-           │
-           ▼
-     Dog vtable: [ &amp;Dog::speak │ &amp;Dog::~Dog ]      runtime type wins
-
-Animal b = *a;              // SLICING: copies only the Animal part!
-b.speak();                  // "..." — b IS an Animal, vptr is Animal's
-
-non-virtual call: resolved at compile time from the static type — no vtable.
-delete a; with a NON-virtual ~Animal = UB: ~Dog never runs.</pre>
+      <pre class="diagram">struct Animal { virtual std::string speak() { return "..."; }  virtual ~Animal() = default; };
+struct Dog : Animal { std::string speak() override { return "Woof"; } };</pre>
+      <div class="fig"><svg viewBox="0 0 880 320" role="img" aria-label="Call-flow diagram of virtual dispatch: a base pointer follows the object's vptr to the Dog vtable and runs Dog::speak; a by-value copy is sliced and uses the Animal vtable instead">
+        <text class="tm" x="24" y="32">Animal* a = new Dog;  a-&gt;speak();  <tspan class="tac">// "Woof"</tspan></text>
+        <rect class="nd" x="24" y="56" width="70" height="32" rx="6"/><text class="tm" x="59" y="76" text-anchor="middle">a</text>
+        <line class="ln" x1="94" y1="72" x2="144" y2="72" marker-end="url(#arm)"/>
+        <rect class="nda" x="150" y="50" width="70" height="44" rx="6"/><text class="tm" x="185" y="76" text-anchor="middle">vptr</text>
+        <rect class="nd" x="220" y="50" width="140" height="44" rx="6"/><text class="tm" x="290" y="76" text-anchor="middle">Dog data</text>
+        <text class="tmu" x="255" y="112" text-anchor="middle">the Dog object</text>
+        <path class="lna" d="M185 94 L185 148" marker-end="url(#ara)"/>
+        <rect class="nda" x="110" y="152" width="260" height="66" rx="6"/>
+        <text class="tb" x="240" y="172" text-anchor="middle">Dog vtable</text>
+        <text class="tm" x="126" y="192">&amp;Dog::speak &#8594; "Woof"</text>
+        <text class="tm" x="126" y="210">&amp;Dog::~Dog</text>
+        <text class="tac" x="240" y="244" text-anchor="middle">virtual call &#8594; runtime type wins</text>
+        <text class="tm" x="490" y="32">Animal b = *a;  b.speak();  <tspan class="twn">// "..." SLICED!</tspan></text>
+        <rect class="ndw" x="490" y="50" width="70" height="44" rx="6"/><text class="tm" x="525" y="76" text-anchor="middle">vptr</text>
+        <rect class="nd" x="560" y="50" width="180" height="44" rx="6"/><text class="tmu" x="650" y="76" text-anchor="middle">Animal part only &#8212; Dog data GONE</text>
+        <path class="lnw" d="M525 94 L525 148" marker-end="url(#arw)"/>
+        <rect class="ndw" x="450" y="152" width="270" height="52" rx="6"/>
+        <text class="tb" x="585" y="172" text-anchor="middle">Animal vtable</text>
+        <text class="tm" x="466" y="192">&amp;Animal::speak &#8594; "..."</text>
+        <text class="twn" x="585" y="244" text-anchor="middle">by-value copy through the base type slices</text>
+        <text class="tmu" x="440" y="290" text-anchor="middle">non-virtual calls resolve at compile time from the static type &#8212; no vtable involved</text>
+        <text class="tmu" x="440" y="308" text-anchor="middle">delete a; with a NON-virtual ~Animal is UB: ~Dog never runs &#8212; polymorphic types travel by &amp; / * / unique_ptr</text>
+      </svg></div>
 
       <p class="diagram-title">Rule of zero vs rule of five — who cleans up</p>
       <pre class="diagram">RULE OF ZERO (default to this):          RULE OF FIVE (owning a raw resource):
@@ -309,30 +404,44 @@ better: wrap fd in a RAII handle type    // copy would double-close ⇒ define a
 once, be back at rule of zero</pre>
 
       <p class="diagram-title">Dependency inversion — who points at whom</p>
-      <pre class="diagram">WITHOUT DIP:  high-level depends on detail     WITH DIP:  both depend on abstraction
-
-  OrderService ───▶ StripeClient                 OrderService ───▶ PaymentGateway
-  (edits ripple up from payment                  (abstract: pure virtual)  ▲
-   details; untestable without                                             │ implements
-   hitting Stripe)                                          StripeGateway , FakeGateway
-
-composition root (main.cpp) does the wiring:
-  auto gateway = std::make_unique&lt;StripeGateway&gt;(cfg);
-  OrderService svc{*gateway};              // ctor takes PaymentGateway&amp;
-tests just do:  FakeGateway fake; OrderService svc{fake};   — no framework needed</pre>
+      <div class="fig"><svg viewBox="0 0 880 300" role="img" aria-label="Dependency diagram: without DIP, OrderService depends directly on StripeClient; with DIP, OrderService depends on an abstract PaymentGateway that StripeGateway and FakeGateway implement">
+        <text class="twn" x="150" y="32" text-anchor="middle">WITHOUT DIP</text>
+        <rect class="nd" x="60" y="48" width="180" height="36" rx="6"/><text class="tm" x="150" y="70" text-anchor="middle">OrderService</text>
+        <line class="lnw" x1="150" y1="84" x2="150" y2="134" marker-end="url(#arw)"/>
+        <rect class="ndw" x="60" y="140" width="180" height="36" rx="6"/><text class="tm" x="150" y="162" text-anchor="middle">StripeClient</text>
+        <text class="tmu" x="150" y="208" text-anchor="middle">payment SDK details ripple into</text>
+        <text class="tmu" x="150" y="226" text-anchor="middle">business logic; untestable without Stripe</text>
+        <line class="ln dsh" x1="370" y1="20" x2="370" y2="270" opacity="0.45"/>
+        <text class="tac" x="640" y="32" text-anchor="middle">WITH DIP</text>
+        <rect class="nd" x="420" y="48" width="180" height="36" rx="6"/><text class="tm" x="510" y="70" text-anchor="middle">OrderService</text>
+        <line class="lna" x1="510" y1="84" x2="510" y2="134" marker-end="url(#ara)"/>
+        <text class="tmu" x="522" y="115">depends on the abstraction</text>
+        <rect class="nda" x="420" y="140" width="180" height="36" rx="6"/><text class="tm" x="510" y="162" text-anchor="middle">&#171;PaymentGateway&#187;</text>
+        <rect class="nd" x="680" y="92" width="170" height="32" rx="6"/><text class="tm" x="765" y="112" text-anchor="middle">StripeGateway</text>
+        <rect class="nd" x="680" y="196" width="170" height="32" rx="6"/><text class="tm" x="765" y="216" text-anchor="middle">FakeGateway (tests)</text>
+        <path class="lna dsh" d="M680 112 L606 148" marker-end="url(#ara)"/>
+        <path class="lna dsh" d="M680 212 L606 168" marker-end="url(#ara)"/>
+        <text class="tmu" x="662" y="146" text-anchor="end">implements</text>
+        <text class="tmu" x="640" y="258" text-anchor="middle">main() injects StripeGateway; tests inject FakeGateway &#8212; no framework,</text>
+        <text class="tmu" x="640" y="276" text-anchor="middle">the constructor takes PaymentGateway&amp;; swap providers at one wiring site</text>
+      </svg></div>
 
       <p class="diagram-title">Runtime vs compile-time polymorphism — pick per problem</p>
-      <pre class="diagram">                     virtual interface          template / CRTP
-types decided at:    RUNTIME (config, plugin)   COMPILE TIME
-dispatch cost:       indirect call via vtable   none — inlined
-one container of     yes: vector&lt;unique_ptr     no — each instantiation
-mixed types?           &lt;Shape&gt;&gt;                   its own type
-error messages:      clean                      template novels (concepts help)
-code lives in:       .cpp (stable ABI)          headers (recompile users)
-
-std::function&lt;R(Args)&gt;: middle ground — type-erased single callable;
-strategy pattern without the hierarchy.
-std::variant + std::visit: closed set of types, no heap, exhaustive switch.</pre>
+      <table class="cmp-table">
+        <thead><tr><th></th><th>virtual interface</th><th>template / CRTP</th></tr></thead>
+        <tbody>
+          <tr><td>types decided at</td><td>runtime (config, plugins, user input)</td><td>compile time</td></tr>
+          <tr><td>dispatch cost</td><td>indirect call via vtable</td><td>none — inlined into the caller</td></tr>
+          <tr><td>container of mixed types</td><td>yes: <code>vector&lt;unique_ptr&lt;Shape&gt;&gt;</code></td><td>no — each instantiation is its own type</td></tr>
+          <tr><td>error messages</td><td>clean</td><td>template novels (C++20 concepts help)</td></tr>
+          <tr><td>code lives in</td><td>.cpp files — stable ABI</td><td>headers — users recompile on change</td></tr>
+        </tbody>
+      </table>
+      <p class="section-note">
+        Middle grounds: <code>std::function&lt;R(Args)&gt;</code> is a type-erased single callable — the strategy
+        pattern without a hierarchy; <code>std::variant</code> + <code>std::visit</code> handles a closed set of
+        types with no heap and an exhaustive compile-checked switch.
+      </p>
 
       <div class="link-list">
         <a href="https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#S-class" target="_blank" rel="noopener">Core Guidelines — classes and class hierarchies</a>
@@ -400,35 +509,57 @@ std::variant + std::visit: closed set of types, no heap, exhaustive switch.</pre
       </div>
 
       <p class="diagram-title">Headers, TUs, and the ODR — where each error comes from</p>
-      <pre class="diagram">util.h:   #pragma once
-          int helper();                // declaration — fine everywhere
-          int broken() { return 1; }   // DEFINITION in a header! (not inline)
-
-a.cpp:  #include "util.h"  ──▶ a.o  contains broken()  ┐
-b.cpp:  #include "util.h"  ──▶ b.o  contains broken()  ┴─▶ LINK: multiple
-                                                            definition (ODR)
-fix: inline int broken(){...}   or   move body to util.cpp
-
-forgot to add util.cpp to the build?  a.o: "call helper" ──▶ LINK:
-                                       undefined reference to helper()
-include guards CANNOT fix either — they act within one TU only.</pre>
+      <div class="fig"><svg viewBox="0 0 880 390" role="img" aria-label="Data-flow diagram: a function defined in a header is compiled into both including translation units, so the linker sees two definitions and reports a multiple-definition ODR error">
+        <rect class="ndw" x="330" y="24" width="240" height="64" rx="6"/>
+        <text class="tb" x="450" y="46" text-anchor="middle">util.h</text>
+        <text class="tm" x="450" y="70" text-anchor="middle">int broken() { return 1; }</text>
+        <text class="twn" x="450" y="108" text-anchor="middle">a DEFINITION in a header (not inline)</text>
+        <path class="ln dsh" d="M360 88 L212 140" marker-end="url(#arm)"/><text class="tmu" x="262" y="112" text-anchor="end">#include</text>
+        <path class="ln dsh" d="M540 88 L688 140" marker-end="url(#arm)"/><text class="tmu" x="638" y="112">#include</text>
+        <rect class="nd" x="120" y="144" width="170" height="36" rx="6"/><text class="tm" x="205" y="166" text-anchor="middle">a.cpp</text>
+        <rect class="nd" x="590" y="144" width="170" height="36" rx="6"/><text class="tm" x="675" y="166" text-anchor="middle">b.cpp</text>
+        <line class="ln" x1="205" y1="180" x2="205" y2="224" marker-end="url(#arm)"/><text class="tmu" x="217" y="206">compile</text>
+        <line class="ln" x1="675" y1="180" x2="675" y2="224" marker-end="url(#arm)"/><text class="tmu" x="687" y="206">compile</text>
+        <rect class="nd" x="120" y="230" width="170" height="36" rx="6"/><text class="tm" x="205" y="252" text-anchor="middle">a.o &#8212; defines broken()</text>
+        <rect class="nd" x="590" y="230" width="170" height="36" rx="6"/><text class="tm" x="675" y="252" text-anchor="middle">b.o &#8212; defines broken()</text>
+        <path class="lnw" d="M240 266 L360 300" marker-end="url(#arw)"/>
+        <path class="lnw" d="M640 266 L540 300" marker-end="url(#arw)"/>
+        <rect class="ndw" x="330" y="302" width="240" height="48" rx="6"/>
+        <text class="tb" x="450" y="322" text-anchor="middle">linker &#10007;</text>
+        <text class="tm" x="450" y="342" text-anchor="middle">multiple definition of broken()</text>
+        <text class="tac" x="450" y="378" text-anchor="middle">fix: mark it inline, or move the body to util.cpp &#8212; #pragma once cannot help: guards act within ONE TU only</text>
+      </svg></div>
+      <p class="section-note">
+        The mirror-image error: declare <code>helper()</code> in util.h but forget util.cpp in the build, and the
+        linker reports <em>undefined reference to helper()</em> — compiled fine, definition never linked.
+      </p>
 
       <p class="diagram-title">CMake target graph — usage requirements propagate</p>
-      <pre class="diagram">CMakeLists.txt:
-  add_library(core src/domain.cpp)                      # pure rules
-  target_include_directories(core PUBLIC include/)
-  add_library(infra src/sqlite_repo.cpp)
-  target_link_libraries(infra PUBLIC core PRIVATE SQLite::SQLite3)
-  add_executable(app src/main.cpp)
-  target_link_libraries(app PRIVATE infra)
-  add_executable(core_tests test/domain_test.cpp)
-  target_link_libraries(core_tests PRIVATE core GTest::gtest_main)
-
-  app ──▶ infra ──▶ core          core_tests ──▶ core   (no infra, no DB —
-              └──▶ sqlite (hidden: PRIVATE)              tests stay fast)
-PUBLIC  = my users need this too (includes/links flow downstream)
-PRIVATE = implementation detail (stops here)
-core links nothing from the edges ⇒ compiler enforces the architecture.</pre>
+      <pre class="diagram">add_library(core src/domain.cpp)                          # pure rules
+target_include_directories(core PUBLIC include/)
+add_library(infra src/sqlite_repo.cpp)
+target_link_libraries(infra PUBLIC core PRIVATE SQLite::SQLite3)
+add_executable(app src/main.cpp)
+target_link_libraries(app PRIVATE infra)
+add_executable(core_tests test/domain_test.cpp)
+target_link_libraries(core_tests PRIVATE core GTest::gtest_main)</pre>
+      <div class="fig"><svg viewBox="0 0 880 280" role="img" aria-label="CMake target dependency graph: app links infra privately, infra links core publicly and SQLite privately, core_tests links only core and gtest">
+        <rect class="nd" x="40" y="40" width="150" height="36" rx="6"/><text class="tm" x="115" y="62" text-anchor="middle">app (exe)</text>
+        <rect class="nd" x="300" y="40" width="150" height="36" rx="6"/><text class="tm" x="375" y="62" text-anchor="middle">infra</text>
+        <rect class="nda" x="560" y="40" width="150" height="36" rx="6"/><text class="tm" x="635" y="62" text-anchor="middle">core &#8212; pure rules</text>
+        <line class="ln" x1="190" y1="58" x2="294" y2="58" marker-end="url(#arm)"/><text class="tmu" x="242" y="50" text-anchor="middle">PRIVATE</text>
+        <line class="lna" x1="450" y1="58" x2="554" y2="58" marker-end="url(#ara)"/><text class="tac" x="502" y="50" text-anchor="middle">PUBLIC</text>
+        <rect class="ndw" x="300" y="170" width="190" height="36" rx="6"/><text class="tm" x="395" y="192" text-anchor="middle">SQLite::SQLite3</text>
+        <path class="ln dsh" d="M375 76 L390 164" marker-end="url(#arm)"/>
+        <text class="tmu" x="402" y="130">PRIVATE &#8212; hidden from app</text>
+        <rect class="nd" x="560" y="170" width="150" height="36" rx="6"/><text class="tm" x="635" y="192" text-anchor="middle">core_tests</text>
+        <line class="lna" x1="635" y1="170" x2="635" y2="82" marker-end="url(#ara)"/>
+        <text class="tac" x="647" y="130">links ONLY core</text>
+        <rect class="nd" x="760" y="170" width="100" height="36" rx="6"/><text class="tm" x="810" y="192" text-anchor="middle">gtest</text>
+        <line class="ln" x1="710" y1="188" x2="754" y2="188" marker-end="url(#arm)"/>
+        <text class="tmu" x="440" y="242" text-anchor="middle">PUBLIC = consumers inherit the includes and links &#183; PRIVATE = implementation detail, propagation stops</text>
+        <text class="tac" x="440" y="264" text-anchor="middle">core links nothing from the edges &#8212; the compiler enforces the architecture; core_tests run fast, with no DB</text>
+      </svg></div>
 
       <p class="diagram-title">Data race vs mutex vs atomic — three outcomes</p>
       <pre class="diagram">int counter = 0;                      // shared, 2 threads, ++counter each
@@ -448,20 +579,33 @@ condition_variable:  consumer: cv.wait(lock, []{ return !q.empty(); });
                      — predicate re-checked after every wakeup (spurious ok)</pre>
 
       <p class="diagram-title">The CI quality gauntlet — what each stage catches</p>
-      <pre class="diagram">push ─▶ clang-format --dry-run          style drift            (seconds)
-     ─▶ compile -Wall -Wextra -Werror   shadowing, narrowing,  (minutes)
-                                        missing returns
-     ─▶ clang-tidy                      bug patterns, use-after-move,
-                                        modernize-*, core-guidelines
-     ─▶ ctest (Debug + asserts)         logic bugs
-     ─▶ ctest under ASan + UBSan        use-after-free, overflow, leaks,
-                                        signed overflow, bad casts
-     ─▶ ctest under TSan                data races, deadlocks
-     ─▶ (parsers) libFuzzer corpus      crashes on hostile input
-     ─▶ Release build -O2 -DNDEBUG      the artifact you actually ship
-
-sanitizers see only executed code — they multiply with test coverage,
-not replace it.  ASan+TSan can't run together: separate CI jobs.</pre>
+      <div class="fig"><svg viewBox="0 0 880 340" role="img" aria-label="CI pipeline flow: clang-format, warnings-as-errors compile, clang-tidy, debug tests, then sanitizer test runs, fuzzing, and the release build">
+        <rect class="nd" x="15" y="40" width="190" height="44" rx="6"/><text class="tm" x="110" y="66" text-anchor="middle">clang-format</text>
+        <rect class="nd" x="231" y="40" width="190" height="44" rx="6"/><text class="tm" x="326" y="66" text-anchor="middle">-Wall -Wextra -Werror</text>
+        <rect class="nd" x="447" y="40" width="190" height="44" rx="6"/><text class="tm" x="542" y="66" text-anchor="middle">clang-tidy</text>
+        <rect class="nd" x="663" y="40" width="190" height="44" rx="6"/><text class="tm" x="758" y="66" text-anchor="middle">ctest (Debug + asserts)</text>
+        <text class="tmu" x="110" y="104" text-anchor="middle">style drift (seconds)</text>
+        <text class="tmu" x="326" y="104" text-anchor="middle">shadowing, narrowing</text>
+        <text class="tmu" x="542" y="104" text-anchor="middle">bug patterns, use-after-move</text>
+        <text class="tmu" x="758" y="104" text-anchor="middle">logic bugs</text>
+        <line class="ln" x1="205" y1="62" x2="225" y2="62" marker-end="url(#arm)"/>
+        <line class="ln" x1="421" y1="62" x2="441" y2="62" marker-end="url(#arm)"/>
+        <line class="ln" x1="637" y1="62" x2="657" y2="62" marker-end="url(#arm)"/>
+        <path class="ln" d="M758 84 L758 140 L110 140 L110 184" marker-end="url(#arm)"/>
+        <rect class="nd" x="15" y="190" width="190" height="44" rx="6"/><text class="tm" x="110" y="216" text-anchor="middle">ctest + ASan / UBSan</text>
+        <rect class="nd" x="231" y="190" width="190" height="44" rx="6"/><text class="tm" x="326" y="216" text-anchor="middle">ctest + TSan</text>
+        <rect class="nd" x="447" y="190" width="190" height="44" rx="6"/><text class="tm" x="542" y="216" text-anchor="middle">libFuzzer (parsers)</text>
+        <rect class="nda" x="663" y="190" width="190" height="44" rx="6"/><text class="tm" x="758" y="216" text-anchor="middle">Release -O2 -DNDEBUG</text>
+        <text class="tmu" x="110" y="254" text-anchor="middle">use-after-free, UB, leaks</text>
+        <text class="tmu" x="326" y="254" text-anchor="middle">data races, deadlocks</text>
+        <text class="tmu" x="542" y="254" text-anchor="middle">crashes on hostile input</text>
+        <text class="tmu" x="758" y="254" text-anchor="middle">the artifact you ship</text>
+        <line class="ln" x1="205" y1="212" x2="225" y2="212" marker-end="url(#arm)"/>
+        <line class="ln" x1="421" y1="212" x2="441" y2="212" marker-end="url(#arm)"/>
+        <line class="ln" x1="637" y1="212" x2="657" y2="212" marker-end="url(#arm)"/>
+        <text class="tmu" x="440" y="298" text-anchor="middle">every gate must pass. Sanitizers see only executed code &#8212; they multiply with test coverage, not replace it.</text>
+        <text class="twn" x="440" y="320" text-anchor="middle">ASan and TSan cannot share one binary &#8594; separate CI jobs</text>
+      </svg></div>
 
       <div class="link-list">
         <a href="https://cmake.org/cmake/help/latest/guide/tutorial/index.html" target="_blank" rel="noopener">CMake tutorial — official documentation</a>
