@@ -210,7 +210,8 @@
         <line class="lna" x1="755" y1="140" x2="755" y2="198" marker-end="url(#ara)"/>
         <text class="twn" x="325" y="202" text-anchor="middle">syntax &amp; template errors surface here &#8593;</text>
         <text class="twn" x="440" y="288" text-anchor="middle">undefined reference &#183; multiple definition (ODR) &#8594; reported by the LINKER, not the compiler</text>
-        <text class="tmu" x="440" y="312" text-anchor="middle">no VM, no JIT, no GC &#8212; the executable IS the machine code (each .cpp compiles independently; they only meet at link time)</text>
+        <text class="tmu" x="440" y="308" text-anchor="middle">no VM, no JIT, no GC &#8212; the executable IS the machine code</text>
+        <text class="tmu" x="440" y="324" text-anchor="middle">each .cpp compiles independently; the pieces only meet at link time</text>
       </svg></div>
 
       <p class="diagram-title">Value vs pointer vs reference — what assignment does</p>
@@ -238,7 +239,7 @@
         <line class="ln" x1="550" y1="132" x2="674" y2="132" marker-end="url(#arm)"/><text class="tmu" x="612" y="124" text-anchor="middle">owns</text>
         <path class="ln" d="M480 188 L480 82" marker-end="url(#arm)"/><text class="tmu" x="470" y="150" text-anchor="end">holds a's address</text>
         <path class="lna dsh" d="M520 260 L520 82" marker-end="url(#ara)"/><text class="tmu" x="532" y="240">alias &#8212; same object,</text><text class="tmu" x="532" y="256">another name</text>
-        <text class="tmu" x="440" y="322">pointer: nullable, reseatable &#183; reference: bound once, never null &#183; copy: whole new object</text>
+        <text class="tmu" x="440" y="322" text-anchor="middle">pointer: nullable, reseatable &#183; reference: bound once, never null &#183; copy: whole new object</text>
       </svg></div>
 
       <p class="diagram-title">RAII — lifetime does the cleanup</p>
@@ -274,7 +275,8 @@ throw before the cleanup line leaks the lot.</pre>
         <line class="lnw dsh" x1="440" y1="252" x2="146" y2="252" marker-end="url(#arw)"/>
         <text class="twn" x="290" y="244" text-anchor="middle">no handler here &#8212; parse's locals destroyed</text>
         <rect class="nda" x="30" y="270" width="220" height="30" rx="6"/><text class="tm" x="140" y="289" text-anchor="middle">catch (const FileError&amp; e)</text>
-        <text class="tmu" x="440" y="332" text-anchor="middle">destructors ran in every unwound frame &#8212; locks, files, memory released automatically; no matching handler anywhere &#8594; std::terminate</text>
+        <text class="tmu" x="440" y="326" text-anchor="middle">destructors ran in every unwound frame &#8212; locks, files, memory released automatically (RAII)</text>
+        <text class="tmu" x="440" y="344" text-anchor="middle">no matching handler anywhere &#8594; std::terminate</text>
       </svg></div>
 
       <p class="diagram-title">vector reallocation — why iterators dangle</p>
@@ -296,7 +298,8 @@ throw before the cleanup line leaks the lot.</pre>
         <text class="twn" x="185" y="180">still points into freed memory &#8594; *it is USE-AFTER-FREE (UB)</text>
         <rect class="nd" x="588" y="210" width="80" height="32" rx="6"/><text class="tm" x="628" y="230" text-anchor="middle">v</text>
         <line class="lna" x1="628" y1="210" x2="628" y2="132" marker-end="url(#ara)"/>
-        <text class="tmu" x="440" y="278" text-anchor="middle">same trap: pointers/references to elements, range-for over a vector you push_back into &#183; fixes: reserve() up front, use indexes, or append after the loop</text>
+        <text class="tmu" x="440" y="272" text-anchor="middle">same trap: pointers/references to elements, and range-for over a vector you push_back into</text>
+        <text class="tmu" x="440" y="290" text-anchor="middle">fixes: reserve() up front, use indexes, or collect additions and append after the loop</text>
       </svg></div>
 
       <div class="link-list">
@@ -409,8 +412,8 @@ once, be back at rule of zero</pre>
         <rect class="nd" x="60" y="48" width="180" height="36" rx="6"/><text class="tm" x="150" y="70" text-anchor="middle">OrderService</text>
         <line class="lnw" x1="150" y1="84" x2="150" y2="134" marker-end="url(#arw)"/>
         <rect class="ndw" x="60" y="140" width="180" height="36" rx="6"/><text class="tm" x="150" y="162" text-anchor="middle">StripeClient</text>
-        <text class="tmu" x="150" y="208" text-anchor="middle">payment SDK details ripple into</text>
-        <text class="tmu" x="150" y="226" text-anchor="middle">business logic; untestable without Stripe</text>
+        <text class="tmu" x="160" y="208" text-anchor="middle">payment SDK details leak into business logic;</text>
+        <text class="tmu" x="160" y="226" text-anchor="middle">untestable without hitting Stripe</text>
         <line class="ln dsh" x1="370" y1="20" x2="370" y2="270" opacity="0.45"/>
         <text class="tac" x="640" y="32" text-anchor="middle">WITH DIP</text>
         <rect class="nd" x="420" y="48" width="180" height="36" rx="6"/><text class="tm" x="510" y="70" text-anchor="middle">OrderService</text>
@@ -422,8 +425,8 @@ once, be back at rule of zero</pre>
         <path class="lna dsh" d="M680 112 L606 148" marker-end="url(#ara)"/>
         <path class="lna dsh" d="M680 212 L606 168" marker-end="url(#ara)"/>
         <text class="tmu" x="662" y="146" text-anchor="end">implements</text>
-        <text class="tmu" x="640" y="258" text-anchor="middle">main() injects StripeGateway; tests inject FakeGateway &#8212; no framework,</text>
-        <text class="tmu" x="640" y="276" text-anchor="middle">the constructor takes PaymentGateway&amp;; swap providers at one wiring site</text>
+        <text class="tmu" x="640" y="258" text-anchor="middle">main() injects StripeGateway; tests inject FakeGateway</text>
+        <text class="tmu" x="640" y="276" text-anchor="middle">no framework &#8212; the ctor takes PaymentGateway&amp;; one wiring site</text>
       </svg></div>
 
       <p class="diagram-title">Runtime vs compile-time polymorphism — pick per problem</p>

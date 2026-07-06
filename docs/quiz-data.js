@@ -353,7 +353,7 @@ const quizData = {
         ["payload  (capture by value — the lambda owns a copy)", true],
         ["&payload  (dangles: the local dies when schedule returns)", false],
         ["&  (same dangling reference, spelled implicitly)", false],
-        ["  (empty capture list)", false]
+        ["(leave the capture list empty)", false]
       ],
       explain: "The lambda escapes the scope, so by-reference captures dangle — stack-use-after-return, UB the moment the task runs. Capturing by value copies payload into the closure, which owns it for as long as the task lives; 'payload = std::move(payload)' would avoid even that copy. An empty capture list does not compile here (payload is used inside)."
     },
