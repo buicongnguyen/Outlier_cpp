@@ -89,6 +89,7 @@
       <a href="#lang">Language &amp; Memory</a>
       <a href="#ood">OO Design</a>
       <a href="#arch">Architecture</a>
+      <a href="#concurrency">Concurrency</a>
       <a href="#resources">Resources</a>
     </nav>
   </header>
@@ -121,7 +122,7 @@
       <strong id="score-text">Score: 0 / 0</strong>
       <p class="section-note" id="score-note"></p>
       <div class="bar-buttons">
-        <button class="bar-btn secondary" id="toggle-explain" type="button">Show all explanations</button>
+        <button class="bar-btn secondary" id="toggle-explain" type="button" aria-pressed="false">Show answers &amp; explanations</button>
         <button class="bar-btn" id="retry" type="button">Retry (reshuffle)</button>
       </div>
     </div>
@@ -146,7 +147,7 @@
         <div><dt>Stack vs heap</dt><dd>Automatic (stack) objects die deterministically at scope exit — the backbone of RAII. Heap objects (<code>new</code>) live until deleted; in modern code that delete is done by a smart pointer, never by hand.</dd></div>
         <div><dt>RAII</dt><dd>Resource Acquisition Is Initialization: tie a resource (memory, file, lock, socket) to an object's lifetime — acquire in the constructor, release in the destructor. Cleanup then happens automatically on every exit path, including exceptions.</dd></div>
         <div><dt>unique_ptr</dt><dd>Sole ownership, zero overhead: exactly one owner, deletes on destruction, movable but not copyable. The default owning pointer — <code>std::make_unique&lt;T&gt;()</code> replaces <code>new</code>.</dd></div>
-        <div><dt>shared_ptr / weak_ptr</dt><dd>Reference-counted shared ownership: the last owner deletes. Costs an atomic control block. <code>weak_ptr</code> observes without owning — the standard fix for reference cycles that would otherwise leak.</dd></div>
+        <div><dt>shared_ptr / weak_ptr</dt><dd>Reference-counted shared ownership: the last owner deletes. Reference counts on distinct <code>shared_ptr</code> copies are synchronized, but that does not make the pointee thread-safe or permit unsynchronized mutation of the same <code>shared_ptr</code> object. <code>weak_ptr</code> observes without owning — the standard fix for reference cycles.</dd></div>
         <div><dt>Move semantics</dt><dd>An rvalue reference (<code>T&amp;&amp;</code>) binds to temporaries and to <code>std::move</code>-d objects; the move constructor steals the source's guts (pointers, buffers) instead of copying, leaving it valid-but-unspecified.</dd></div>
         <div><dt>std::move</dt><dd>Not a move — a cast to rvalue that <em>permits</em> moving. After moving from an object, don't use its value again (assigning a fresh value is fine).</dd></div>
         <div><dt>Copy elision / RVO</dt><dd>Returning a local by value usually copies nothing: the object is constructed directly in the caller's slot. Since C++17 this is mandatory for returned prvalues — so return by value, freely.</dd></div>
@@ -244,19 +245,19 @@
 
       <p class="diagram-title">RAII — lifetime does the cleanup</p>
       <pre class="diagram">void process(const Path&amp; path) {
-    std::lock_guard lock(mu);                 // acquire: ctor locks
     auto file = std::make_unique&lt;File&gt;(path); // acquire: ctor opens
     if (!file-&gt;valid()) return;               // ── early return
-    parse(*file);                             // ── may throw
+    auto parsed = parse(*file);               // I/O; no shared-state lock held
+
+    std::lock_guard lock(mu);                 // lock only the short commit
+    results.push_back(std::move(parsed));     // ── may throw
 }                                             // ── normal exit
 
 every path leaves through the same door:
-  scope exit ─▶ destructors run in REVERSE order:
-                ~unique_ptr ─▶ closes/deletes File
-                ~lock_guard ─▶ unlocks mu
-no finally, no leaks, exception-safe by construction.
-compare manual style: unlock+close duplicated on all 3 paths, and a
-throw before the cleanup line leaks the lot.</pre>
+  before the lock: ~unique_ptr closes/deletes File
+  during commit:   ~lock_guard unlocks, then ~unique_ptr closes File
+no finally, no leaked resource, and no mutex held across file I/O.
+Manual unlock/close calls would have to be correct on every return and throw.</pre>
 
       <p class="diagram-title">Exception propagation — a throw as a sequence</p>
       <div class="fig"><svg viewBox="0 0 880 350" role="img" aria-label="Sequence diagram: main calls parse, parse calls readFile, readFile throws; the stack unwinds through readFile and parse, running destructors, until main's catch handles the exception">
@@ -344,7 +345,7 @@ throw before the cleanup line leaks the lot.</pre>
         <div><dt>PIMPL</dt><dd>Pointer-to-implementation: the public header holds only a <code>unique_ptr&lt;Impl&gt;</code>; all members live in the .cpp. Cuts compile-time coupling and keeps ABI stable when internals change.</dd></div>
         <div><dt>operator overloading / &lt;=&gt;</dt><dd>Value types define <code>==</code> and (C++20) the spaceship <code>&lt;=&gt;</code> to get all comparisons consistently — often just <code>= default</code>, comparing member by member.</dd></div>
         <div><dt>explicit</dt><dd>Blocks single-argument constructors from acting as implicit conversions (<code>void f(Meters m); f(5);</code> compiling silently is how unit bugs are born). Default for single-arg constructors.</dd></div>
-        <div><dt>Immutability</dt><dd><code>const</code> objects and members: safe to share across threads (the standard library assumes const = thread-safe reads), safe as map keys, trivially cacheable.</dd></div>
+        <div><dt>Immutability</dt><dd>Truly immutable state is safe to share after safe publication, and immutable values make good map keys and cache entries. <code>const</code> alone is not proof of thread safety: a const method can touch <code>mutable</code> caches or pointer-reachable shared state.</dd></div>
         <div><dt>final</dt><dd>On a class: no further inheritance. On a virtual function: no further overriding. Documents design intent and lets the optimizer devirtualize calls it can prove.</dd></div>
         <div><dt>Multiple inheritance / diamond</dt><dd>A class may have several bases. When two bases share a grandparent, the grandparent is duplicated unless inherited <code>virtual</code>ly. Sane convention: inherit one implementation class at most, plus any number of pure interfaces.</dd></div>
         <div><dt>NVI idiom</dt><dd>Non-Virtual Interface: public non-virtual methods call private virtual hooks. The base class controls the contract (pre/postconditions, locking, logging) while derived classes customize only the hook.</dd></div>
@@ -430,7 +431,7 @@ once, be back at rule of zero</pre>
       </svg></div>
 
       <p class="diagram-title">Runtime vs compile-time polymorphism — pick per problem</p>
-      <table class="cmp-table">
+      <div class="table-wrap"><table class="cmp-table">
         <thead><tr><th></th><th>virtual interface</th><th>template / CRTP</th></tr></thead>
         <tbody>
           <tr><td>types decided at</td><td>runtime (config, plugins, user input)</td><td>compile time</td></tr>
@@ -439,7 +440,7 @@ once, be back at rule of zero</pre>
           <tr><td>error messages</td><td>clean</td><td>template novels (C++20 concepts help)</td></tr>
           <tr><td>code lives in</td><td>.cpp files — stable ABI</td><td>headers — users recompile on change</td></tr>
         </tbody>
-      </table>
+      </table></div>
       <p class="section-note">
         Middle grounds: <code>std::function&lt;R(Args)&gt;</code> is a type-erased single callable — the strategy
         pattern without a hierarchy; <code>std::variant</code> + <code>std::visit</code> handles a closed set of
@@ -485,18 +486,23 @@ once, be back at rule of zero</pre>
         <div><dt>Profilers</dt><dd>Measure before optimizing: perf/VTune/Instruments for CPU sampling, heaptrack/ASan for allocations. The hot spot is rarely where you guess.</dd></div>
         <div><dt>STL containers</dt><dd><code>vector</code> (default: contiguous, cache-friendly), <code>array</code> (fixed), <code>deque</code>, <code>list</code> (rarely right), <code>map/set</code> (ordered trees, O(log n)), <code>unordered_map/set</code> (hash, O(1) avg).</dd></div>
         <div><dt>Algorithms / ranges</dt><dd><code>std::sort</code>, <code>find_if</code>, <code>transform</code>, <code>accumulate</code> over iterator pairs — C++20 ranges compose them lazily (<code>views::filter | views::transform</code>). Prefer algorithms to hand-rolled loops.</dd></div>
-        <div><dt>std::thread / jthread</dt><dd>OS threads; <code>jthread</code> (C++20) joins automatically and carries a stop token. Prefer higher-level <code>std::async</code>/task queues to raw thread management.</dd></div>
-        <div><dt>Mutex / lock_guard</dt><dd><code>std::mutex</code> protects shared state; <code>lock_guard</code>/<code>scoped_lock</code> lock RAII-style (scoped_lock takes several mutexes deadlock-free). Data + its mutex belong in one class.</dd></div>
-        <div><dt>std::atomic</dt><dd>Race-free single-variable operations (counters, flags) without a lock. Default memory order (seq_cst) is correct; weaker orders are an expert tool.</dd></div>
-        <div><dt>Data race</dt><dd>Two threads touching the same memory, at least one writing, no synchronization: UB — not "stale reads" but license for the optimizer to break you. TSan finds them; mutexes/atomics prevent them.</dd></div>
-        <div><dt>condition_variable</dt><dd>Sleep until a predicate holds: <code>cv.wait(lock, []{ return !queue.empty(); })</code> — always with a predicate (spurious wakeups) and under the mutex guarding the state.</dd></div>
+        <div><dt>std::thread / jthread</dt><dd>OS threads. Destroying a joinable <code>std::thread</code> calls <code>std::terminate</code>, so every path must join or transfer ownership; <code>jthread</code> (C++20) requests cooperative stop and joins in its destructor. Prefer scoped thread ownership and task queues to detached threads.</dd></div>
+        <div><dt>Mutex / RAII locks</dt><dd><code>std::mutex</code> protects shared state. <code>lock_guard</code> owns one lock for a scope; <code>unique_lock</code> supports waiting and explicit unlock; <code>scoped_lock</code> uses deadlock avoidance when acquiring several mutexes together. Data and its mutex belong in one class.</dd></div>
+        <div><dt>std::atomic</dt><dd>Each load, store, exchange, or read-modify-write is indivisible and participates in the C++ memory model, without a user-managed mutex. The implementation may still use an internal lock; query <code>is_lock_free()</code>/<code>is_always_lock_free</code> instead of assuming.</dd></div>
+        <div><dt>Happens-before</dt><dd>The ordering relation that makes one thread's writes visible to another. Unlock-to-lock on the same mutex and a release operation observed by an acquire operation establish it; wall-clock order or “the producer probably ran first” does not.</dd></div>
+        <div><dt>Atomic memory order</dt><dd><code>relaxed</code> gives atomicity only; release/acquire can publish surrounding data; <code>seq_cst</code> is the strongest and safest default. A stronger order cannot turn several atomic statements into one transaction.</dd></div>
+        <div><dt>Data race</dt><dd>Two potentially concurrent accesses conflict when at least one writes; if at least one of those accesses is non-atomic and neither happens-before the other, the program has undefined behavior. Concurrent reads are fine; atomic accesses are race-free but the surrounding algorithm can still be wrong.</dd></div>
+        <div><dt>condition_variable</dt><dd>Sleep until protected state may have changed: <code>cv.wait(lock, [&amp;]{ return closed || !queue.empty(); })</code>. Re-check in the predicate overload or an explicit <code>while</code> loop because wakeups can be spurious or stale.</dd></div>
+        <div><dt>Blocking / lock-free / wait-free</dt><dd>A blocking operation may wait for a lock or condition. Lock-free means system-wide progress—some operation completes—while wait-free gives every operation a bounded-step guarantee. A method named <code>try_pop</code> is not necessarily lock-free.</dd></div>
+        <div><dt>Bounded queue / backpressure</dt><dd>A bounded work queue caps memory and forces a full-queue policy: block producers, return failure, drop, or overwrite. Shutdown is part of its contract: close the queue, wake consumers and producers, drain or discard deliberately, then join workers.</dd></div>
+        <div><dt>volatile</dt><dd>For special observable memory such as memory-mapped device registers; it is not thread synchronization. It provides neither atomicity nor inter-thread ordering—use mutexes or atomics for shared data.</dd></div>
         <div><dt>Exceptions vs expected</dt><dd>Exceptions for rare, non-local failures (RAII makes propagation safe); <code>std::optional</code>/<code>std::expected</code> (C++23) for expected, local failures — the error is in the return type, visible at every call site.</dd></div>
         <div><dt>Warnings as errors</dt><dd><code>-Wall -Wextra -Werror</code> (or /W4 /WX): the compiler catches shadowing, narrowing, missing returns, unused results. The cheapest static analysis there is.</dd></div>
         <div><dt>C++20 modules</dt><dd><code>import</code> instead of textual <code>#include</code>: compiled once, no macro leakage, faster builds in principle. Toolchain and build-system support is still uneven — headers remain the deployed reality in most codebases.</dd></div>
         <div><dt>LTO</dt><dd>Link-Time Optimization: the optimizer sees all TUs together at link, enabling cross-file inlining and dead-code elimination. Slower links, faster binaries; common for release builds (-flto).</dd></div>
         <div><dt>Debug vs release builds</dt><dd>Debug: -O0 -g, assertions on — debuggable, slow. Release: -O2/-O3 -DNDEBUG — fast, asserts gone. Bugs that appear only in release are a UB smell; RelWithDebInfo keeps symbols for profiling production-like builds.</dd></div>
         <div><dt>std::async / future</dt><dd>Task-level parallelism: <code>auto f = std::async(std::launch::async, work);</code> runs work on another thread; <code>f.get()</code> joins and returns the result (or rethrows its exception). Simpler than raw threads for one-shot tasks.</dd></div>
-        <div><dt>False sharing</dt><dd>Two threads writing different variables that share a 64-byte cache line ping-pong the line between cores — a silent scalability killer for adjacent counters. Fix: <code>alignas(64)</code> / padding per-thread data.</dd></div>
+        <div><dt>False sharing</dt><dd>Two threads writing different variables on one cache line can ping-pong the line between cores—a silent scalability killer for adjacent counters. Separate hot per-thread state; where supported, <code>std::hardware_destructive_interference_size</code> describes the implementation's useful alignment (64 bytes is common, not universal).</dd></div>
         <div><dt>Microbenchmarking</dt><dd>Google Benchmark and friends: statistically repeated timing of small hot paths. Chief trap: the optimizer deleting the work you meant to measure — use DoNotOptimize, and confirm findings in a real profile.</dd></div>
         <div><dt>Symbol visibility</dt><dd>Shared libraries default to exporting everything; <code>-fvisibility=hidden</code> plus explicit export macros shrinks the ABI surface, speeds loading, and keeps internals legally changeable.</dd></div>
       </dl>
@@ -506,7 +512,9 @@ once, be back at rule of zero</pre>
         <article class="term-card"><h3>The build model explains the errors</h3><p>Each .cpp compiles alone into an object file; the linker then matches every symbol reference to exactly one definition. That model decodes the error zoo: <em>undefined reference</em> = you declared it but never linked its definition (missing .cpp or library); <em>multiple definition</em> = a function <em>defined</em> in a header included twice (fix: <code>inline</code> or move to a .cpp); include guards don't help across TUs — they only stop double-paste within one. Templates must live in headers precisely because the compiler must see the definition to instantiate it per TU.</p></article>
         <article class="term-card"><h3>Modern CMake is target-based</h3><p>Think in targets and their requirements, not global variables: <code>add_library(net ...)</code>, then <code>target_include_directories(net PUBLIC include)</code> and <code>target_link_libraries(app PRIVATE net)</code>. PUBLIC requirements propagate to consumers automatically — no more hand-threading include paths. PRIVATE keeps implementation deps hidden. With vcpkg/Conan providing <code>find_package</code>, a new machine builds with configure + build, no README archaeology. Out-of-source builds keep the tree clean; presets pin compiler/flags for reproducibility; ctest wires tests into CI.</p></article>
         <article class="term-card"><h3>vector until proven otherwise</h3><p>Container choice is mostly cache behavior: <code>vector</code> is contiguous, so iteration prefetches perfectly — it beats <code>list</code> at nearly everything, including many "insert in the middle" workloads, because pointer-chasing misses cache at every hop. Reach for <code>unordered_map</code> for key lookup (O(1) average, but hashing cost and iteration order chaos), <code>map</code> only when you need sorted order or stable iterators, <code>deque</code> for front+back growth. Then: <code>reserve()</code> when the size is known, and prefer algorithms — <code>std::sort</code> + <code>unique</code>, <code>erase_if</code> — over hand loops with iterator-invalidation traps.</p></article>
-        <article class="term-card"><h3>Concurrency that stays correct</h3><p>The C++ memory model makes unsynchronized shared mutation UB, so the discipline is structural: share nothing by default (thread-owned data, message passing); where sharing is required, pair the data with its mutex in one class so unlocked access is impossible to write; use <code>std::atomic</code> for lone flags/counters. Locks are RAII (<code>scoped_lock</code>), held short, never across callbacks or I/O. Deadlocks come from inconsistent lock ordering — scoped_lock's multi-mutex form fixes the two-lock case. Trust TSan over code review: races hide in "obviously fine" code for years.</p></article>
+        <article class="term-card"><h3>Concurrency that stays correct</h3><p>The C++ memory model makes data races UB, so start with ownership: immutable inputs, thread-owned state, and message passing. Where sharing is required, pair data with its mutex so unlocked access is hard to express; use an atomic only when the invariant really fits its operations. Locks are RAII, held briefly, and never held across callbacks or I/O. Prevent deadlock with a documented lock order and acquire a required set together with <code>scoped_lock</code>. Use ownership-focused review, realistic stress tests, and TSan together—TSan sees only paths the test actually executes.</p></article>
+        <article class="term-card"><h3>Atomic is a scalpel; mutex is a boundary</h3><p>An atomic counter or one-shot publication flag can be exactly right: one independent value, one well-defined operation, no larger invariant. A compare-exchange loop can encode a conditional transition of one atomic state; a container, independently accessed fields, or a larger transactional rule usually wants a mutex. Atomics do not compose automatically, are not guaranteed lock-free, and can be slower under cache contention. Choose the simplest mechanism that makes the invariant obvious, then benchmark a proven-correct version.</p></article>
+        <article class="term-card"><h3>Queue semantics before queue mechanics</h3><p>Decide producer/consumer topology (SPSC, MPSC, or MPMC), capacity, behavior when full, shutdown, cancellation, and item lifetime before choosing an algorithm. A bounded mutex + condition-variable queue is the general default: understandable, backpressured, and often fast enough. A mutex-backed <code>try_pop</code> can still wait for the mutex. Linked lock-free MPMC queues add CAS retries, ABA risk, and safe memory reclamation; use a tested implementation only when measured latency or progress requirements justify it.</p></article>
         <article class="term-card"><h3>Layering that survives frameworks</h3><p>The clean-architecture shape ports directly: a core library of domain rules that includes nothing from the edges; an application layer defining ports as abstract interfaces (Repository, Clock); infrastructure implementing them with SQLite/HTTP/OS calls; main() wiring it up. In C++ the enforcement is physical — separate CMake targets, and the core target simply doesn't link the infrastructure ones, so the compiler polices the direction. Payoffs: domain tests run in milliseconds with fakes; swapping storage touches one target. The same boundaries also cut compile times — headers stop rippling.</p></article>
         <article class="term-card"><h3>The quality gauntlet in CI</h3><p>C++ correctness is defense in depth, because the language won't catch lifetime and race bugs for you: warnings-as-errors, clang-format (zero style debate), clang-tidy (bug patterns, modernization), unit tests via ctest, then the same tests under ASan+UBSan and TSan — sanitizers only see code that actually executes, so coverage matters. Fuzz anything that parses untrusted bytes. Release builds add <code>-O2 -DNDEBUG</code>; keep assertions meaningful in debug. This gauntlet is table stakes on serious C++ teams — it's what makes fearless refactoring possible in an unsafe language.</p></article>
       </div>
@@ -572,14 +580,230 @@ UNSYNCHRONIZED:      thread A: read 5 ─ add ─ write 6 ┐ lost update — an
                      (optimizer may hoist/merge/delete accesses entirely)
 
 std::atomic&lt;int&gt;:    fetch_add(1) is one indivisible op ─▶ always 7
-                     right for counters/flags; can't protect multi-step logic
+                     right for one counter; atomic does not mean lock-free
 
-std::mutex + guard:  { std::scoped_lock l(mu);  balance -= x;  log.push(x); }
-                     protects INVARIANTS across several operations/objects
+std::mutex + guard:  { std::scoped_lock l(mu);
+                       if (balance &gt;= x) { balance -= x; reserved += x; } }
+                     protects the whole check + two-field invariant
 
-condition_variable:  consumer: cv.wait(lock, []{ return !q.empty(); });
+condition_variable:  consumer: cv.wait(lock, [&amp;]{ return closed || !q.empty(); });
                      producer: { lock; q.push(item); }  cv.notify_one();
-                     — predicate re-checked after every wakeup (spurious ok)</pre>
+                     — predicate re-checked under the mutex after every wakeup</pre>
+
+      <h3 class="sub" id="concurrency">Concurrency deep dive</h3>
+      <p class="section-note">
+        Synchronization is chosen by the invariant and the waiting behavior, not by thread count. First ask
+        whether the state can be immutable, thread-owned, or passed as a message. If it really must be shared,
+        use the smallest mechanism that makes every valid state transition explicit.
+      </p>
+
+      <p class="diagram-title">Mutex, atomic, or queue? — a decision guide</p>
+      <div class="table-wrap"><table class="cmp-table">
+        <thead><tr><th>Mechanism</th><th>Choose it when</th><th>What it gives you</th><th>Main traps</th></tr></thead>
+        <tbody>
+          <tr><td>Ownership / message passing</td><td>Data can be immutable, copied, moved, or owned by one worker.</td><td>No shared mutation and often no synchronization at all.</td><td>Object lifetime, message ordering, and shutdown still need contracts.</td></tr>
+          <tr><td><code>std::mutex</code></td><td>A rule spans a container, several fields, or a check followed by an update.</td><td>One critical section is indivisible to other users of that mutex; code reads like the invariant.</td><td>Deadlock, long hold times, callbacks under lock, and returning references after unlock.</td></tr>
+          <tr><td><code>std::atomic&lt;T&gt;</code></td><td>One value supports the complete operation: counter, flag, pointer, sequence, or carefully designed publication.</td><td>Atomic operations and defined ordering without a user-managed mutex.</td><td>Compound actions do not become atomic; cache contention and weak memory ordering are subtle; lock-free is not guaranteed.</td></tr>
+          <tr><td>Mutex + condition variable</td><td>Workers should sleep for work or producers should wait for bounded capacity.</td><td>Efficient blocking, explicit backpressure, and straightforward MPMC behavior.</td><td>Predicate, close/cancel semantics, and object lifetime must be designed; notification alone is not state.</td></tr>
+          <tr><td>Lock-free queue</td><td>A measured latency/progress requirement justifies topology-specific complexity.</td><td>System-wide progress even if one operation stalls, when the whole implementation is actually lock-free.</td><td>Starvation, CAS contention, ABA, reclamation, false sharing, and algorithms that are correct only for SPSC/MPSC/MPMC.</td></tr>
+        </tbody>
+      </table></div>
+
+      <p class="diagram-title">Why a mutex here, and an atomic there</p>
+      <pre class="diagram">class Inventory {
+    std::mutex mu_;                              // lives beside protected state
+    std::unordered_map&lt;std::string, int&gt; stock_;
+
+public:
+    bool reserve(const std::string&amp; sku, int amount) {
+        std::scoped_lock lock(mu_);              // unlocks on every exit path
+        auto it = stock_.find(sku);
+        if (amount &lt;= 0 || it == stock_.end() || it-&gt;second &lt; amount)
+            return false;
+        it-&gt;second -= amount;                    // find + check + update is ONE rule
+        return true;
+    }
+};
+// A mutex fits: unordered_map is not safe for concurrent mutation, and the
+// decision depends on a compound check-then-update operation.
+
+std::atomic&lt;std::uint64_t&gt; completed{0};
+
+void record_completion() noexcept {
+    completed.fetch_add(1, std::memory_order_relaxed);
+}
+// An atomic fits: this independent statistic needs one indivisible increment.
+// relaxed is enough because the count does not publish any other data.
+
+std::atomic&lt;int&gt; slots{1};
+if (slots.load() &gt; 0) --slots;                   // WRONG: two atomic operations,
+                                                  // not one atomic transaction
+// Use a compare-exchange loop for a one-value conditional update, or a mutex
+// when the rule grows beyond that one value.</pre>
+
+      <p class="diagram-title">Atomic ordering — counting is not publication</p>
+      <pre class="diagram">Payload payload;                       // ordinary, non-atomic object
+std::atomic&lt;bool&gt; ready{false};
+
+// producer — ONE-SHOT publication; payload is not mutated after ready = true
+payload = build_payload();
+ready.store(true, std::memory_order_release);
+
+// consumer — ordering demonstration; use a CV or atomic::wait to avoid spinning
+while (!ready.load(std::memory_order_acquire))
+    std::this_thread::yield();
+use(payload);                          // safe after the acquire observed release
+
+release ─▶ acquire establishes happens-before for the earlier payload write.
+relaxed on ready would NOT publish payload. seq_cst would also be correct and is
+the safest default; weaken ordering only with a written proof and a measured need.
+If any thread writes payload again while a consumer reads it, new synchronization
+is required—the ready flag does not make payload permanently thread-safe.</pre>
+
+      <p class="diagram-title">A bounded, closeable MPMC queue — practical default</p>
+      <pre class="diagram">template&lt;class T&gt;
+class BoundedQueue {
+    static_assert(std::is_nothrow_move_constructible_v&lt;T&gt;);
+
+public:
+    explicit BoundedQueue(std::size_t capacity) : capacity_(capacity) {
+        if (capacity == 0) throw std::invalid_argument("capacity must be positive");
+    }
+
+    bool push(T value) {
+        std::unique_lock lock(mu_);
+        not_full_.wait(lock, [&amp;] {
+            return closed_ || queue_.size() &lt; capacity_;
+        });
+        if (closed_) return false;
+
+        queue_.push(std::move(value));            // state changes under the lock
+        lock.unlock();
+        not_empty_.notify_one();                  // then wake one consumer
+        return true;
+    }
+
+    std::optional&lt;T&gt; pop() {
+        std::unique_lock lock(mu_);
+        not_empty_.wait(lock, [&amp;] {
+            return closed_ || !queue_.empty();
+        });
+        if (queue_.empty()) return std::nullopt;  // closed and fully drained
+
+        T value = std::move(queue_.front());
+        queue_.pop();                             // front + pop stay one operation
+        lock.unlock();
+        not_full_.notify_one();
+        return value;                             // return an owner, not a reference
+    }
+
+    std::optional&lt;T&gt; try_pop() {
+        std::unique_lock lock(mu_);               // may wait to acquire THIS mutex
+        if (queue_.empty()) return std::nullopt;  // but never waits for an item
+        T value = std::move(queue_.front());
+        queue_.pop();
+        lock.unlock();
+        not_full_.notify_one();
+        return value;
+    }
+
+    void close() {
+        {
+            std::lock_guard lock(mu_);
+            closed_ = true;
+        }
+        not_empty_.notify_all();                  // wake consumers to drain/exit
+        not_full_.notify_all();                   // wake blocked producers to fail
+    }
+
+private:
+    const std::size_t capacity_;
+    std::mutex mu_;
+    std::condition_variable not_empty_, not_full_;
+    std::queue&lt;T&gt; queue_;                        // std::queue alone is not thread-safe
+    bool closed_ = false;
+};</pre>
+      <p class="section-note">
+        The predicates—not notifications—are the truth. <code>wait</code> atomically releases the mutex while
+        sleeping, reacquires it, and re-checks the predicate. Closing wakes both sides; consumers drain queued
+        items and then receive <code>nullopt</code>. The queue must outlive every user, so owners close it and join
+        all workers before destruction. If callers must distinguish “open but empty” from “closed and drained,”
+        return a richer result than <code>optional</code>.
+      </p>
+
+      <p class="diagram-title">“Non-blocking” is not one promise</p>
+      <div class="table-wrap"><table class="cmp-table">
+        <thead><tr><th>Term</th><th>Precise meaning</th><th>What it does not promise</th></tr></thead>
+        <tbody>
+          <tr><td>Non-waiting API</td><td><code>try_pop</code> returns when no item is available.</td><td>It may still block acquiring a mutex; the name says nothing about algorithmic progress.</td></tr>
+          <tr><td>Obstruction-free</td><td>An operation completes if it eventually runs alone.</td><td>Progress under continuing contention.</td></tr>
+          <tr><td>Lock-free</td><td>System-wide progress: among competing operations, some operation completes.</td><td>Fairness, bounded latency, or progress for one particular thread.</td></tr>
+          <tr><td>Wait-free</td><td>Every operation finishes in a bounded number of its own steps.</td><td>Low constants or better throughput than a mutex.</td></tr>
+          <tr><td>Linearizable</td><td>Each operation appears to take effect at one instant between call and return.</td><td>Any progress guarantee; correctness and progress are separate properties.</td></tr>
+        </tbody>
+      </table></div>
+
+      <p class="diagram-title">Bounded SPSC ring — the approachable atomic queue</p>
+      <pre class="diagram">template&lt;class T, std::size_t N&gt;
+class SpscRing {
+    static_assert(N &gt;= 2);                       // usable capacity is N - 1
+    static_assert(std::is_default_constructible_v&lt;T&gt;);
+    static_assert(std::is_nothrow_move_assignable_v&lt;T&gt;);
+
+    std::array&lt;T, N&gt; slots_{};
+    std::atomic&lt;std::size_t&gt; head_{0};           // written only by producer
+    std::atomic&lt;std::size_t&gt; tail_{0};           // written only by consumer
+
+public:
+    bool try_push(T value) {                     // exactly ONE producer
+        const auto head = head_.load(std::memory_order_relaxed);
+        const auto next = (head + 1) % N;
+        if (next == tail_.load(std::memory_order_acquire)) return false;
+        slots_[head] = std::move(value);
+        head_.store(next, std::memory_order_release); // publishes the element
+        return true;
+    }
+
+    bool try_pop(T&amp; value) {                    // exactly ONE consumer
+        const auto tail = tail_.load(std::memory_order_relaxed);
+        if (tail == head_.load(std::memory_order_acquire)) return false;
+        value = std::move(slots_[tail]);
+        tail_.store((tail + 1) % N, std::memory_order_release); // frees slot
+        return true;
+    }
+};</pre>
+      <p class="section-note">
+        The one-producer/one-consumer restriction is part of the proof, not a performance hint. This small ring
+        avoids allocation and reclamation, but its end-to-end progress still depends on the atomic index type and
+        on <code>T</code>'s operations; the examples make their no-throw move requirements explicit so a failed
+        move cannot strand a moved-from front element. The standard does not guarantee <code>atomic&lt;size_t&gt;</code> is lock-free.
+        Check <code>is_always_lock_free</code> for a fixed target. Do not turn this into MPMC by merely adding more
+        atomics: a linked MPMC queue must also solve CAS contention, ABA, and safe reclamation (hazard pointers,
+        epochs/QSBR, or another proven scheme). Tagged pointers can detect some ABA cases but do not make a freed
+        node safe to dereference. In a tuned ring, place the independently written head and tail on separate cache
+        lines (using <code>hardware_destructive_interference_size</code> where supported) if profiling shows false
+        sharing. Prefer a tested library implementation for the MPMC job.
+      </p>
+
+      <h3 class="sub" id="concurrency-answers">Concurrency questions — direct answers</h3>
+      <p class="section-note">
+        The quiz below still tests recall and reveals an explanation after each attempt. This fixed answer key
+        gives the direct engineering answer first, including the constraints that make each answer true.
+      </p>
+      <dl class="def-list">
+        <div><dt>When should I choose a mutex?</dt><dd><strong>Answer:</strong> Use a mutex when correctness depends on a compound invariant: a container operation, check-then-update rule, or transition across independently accessed fields. Keep the mutex beside the data, lock with RAII, and return values rather than references that escape after unlock.</dd></div>
+        <div><dt>When should I choose an atomic?</dt><dd><strong>Answer:</strong> Use an atomic when the complete invariant fits one atomic value and a clear operation or protocol: a counter, flag, sequence, pointer, or deliberately encoded state machine. Atomicity does not imply lock-freedom; check <code>is_lock_free()</code> when progress guarantees matter.</dd></div>
+        <div><dt>Why is <code>if (slots.load() &gt; 0) --slots;</code> wrong?</dt><dd><strong>Answer:</strong> The load and decrement are individually atomic but not one transaction, so two threads can both pass the check. Use a compare-exchange loop for that one-value transition, or a mutex when the rule is larger.</dd></div>
+        <div><dt>Which atomic memory order should I use?</dt><dd><strong>Answer:</strong> Start with <code>seq_cst</code>. <code>relaxed</code> is enough for an independent statistic that publishes nothing else; release/acquire is appropriate for a proven publication protocol. Stronger ordering cannot repair a broken multi-step algorithm.</dd></div>
+        <div><dt>Why does a condition variable need <code>unique_lock</code>?</dt><dd><strong>Answer:</strong> Waiting must release the mutex while the thread sleeps and reacquire it before checking state. <code>unique_lock</code> supports that ownership transition; <code>lock_guard</code> deliberately does not.</dd></div>
+        <div><dt>How should a blocking queue shut down?</dt><dd><strong>Answer:</strong> Set <code>closed</code> under the queue mutex, include it in both not-empty and not-full predicates, notify all blocked consumers and producers, define drain-versus-discard behavior, then join every worker before destroying the queue.</dd></div>
+        <div><dt>Is a mutex-backed <code>try_pop()</code> lock-free?</dt><dd><strong>Answer:</strong> No. It may return immediately when no item exists, but it can still wait to acquire the mutex. “Does not wait for data” is an API promise; lock-free is a system-wide progress guarantee.</dd></div>
+        <div><dt>What is lock-free versus wait-free?</dt><dd><strong>Answer:</strong> Lock-free means some competing operation always makes progress, although one thread may starve. Wait-free means every operation completes within a bounded number of its own steps. Neither term guarantees fairness or better throughput.</dd></div>
+        <div><dt>Can the SPSC ring accept more producers or consumers?</dt><dd><strong>Answer:</strong> No. Exactly one producer owns writes to <code>head</code> and exactly one consumer owns writes to <code>tail</code>; that ownership is part of the proof. Adding threads requires a different MPSC/MPMC algorithm.</dd></div>
+        <div><dt>Why is a lock-free MPMC queue difficult?</dt><dd><strong>Answer:</strong> CAS coordination is only the beginning. The design must separately prevent use-after-free with safe reclamation and address ABA with tags, sequence numbers, or an algorithm-specific proof. Prefer a well-tested implementation.</dd></div>
+        <div><dt>What happens when a joinable <code>std::thread</code> is destroyed?</dt><dd><strong>Answer:</strong> The program calls <code>std::terminate</code>. Join on every path or use scoped ownership such as <code>std::jthread</code>; its stop request is cooperative, so the worker still has to observe its stop token.</dd></div>
+        <div><dt>Do <code>volatile</code> or <code>shared_ptr</code> make shared data thread-safe?</dt><dd><strong>Answer:</strong> No. <code>volatile</code> supplies neither atomicity nor inter-thread ordering. <code>shared_ptr</code> synchronizes ownership bookkeeping across distinct copies, not mutation of the pointee; protect the pointee separately.</dd></div>
+      </dl>
 
       <p class="diagram-title">The CI quality gauntlet — what each stage catches</p>
       <div class="fig"><svg viewBox="0 0 880 340" role="img" aria-label="CI pipeline flow: clang-format, warnings-as-errors compile, clang-tidy, debug tests, then sanitizer test runs, fuzzing, and the release build">
@@ -600,7 +824,7 @@ condition_variable:  consumer: cv.wait(lock, []{ return !q.empty(); });
         <rect class="nd" x="447" y="190" width="190" height="44" rx="6"/><text class="tm" x="542" y="216" text-anchor="middle">libFuzzer (parsers)</text>
         <rect class="nda" x="663" y="190" width="190" height="44" rx="6"/><text class="tm" x="758" y="216" text-anchor="middle">Release -O2 -DNDEBUG</text>
         <text class="tmu" x="110" y="254" text-anchor="middle">use-after-free, UB, leaks</text>
-        <text class="tmu" x="326" y="254" text-anchor="middle">data races, deadlocks</text>
+        <text class="tmu" x="326" y="254" text-anchor="middle">data races on executed paths</text>
         <text class="tmu" x="542" y="254" text-anchor="middle">crashes on hostile input</text>
         <text class="tmu" x="758" y="254" text-anchor="middle">the artifact you ship</text>
         <line class="ln" x1="205" y1="212" x2="225" y2="212" marker-end="url(#arm)"/>
@@ -615,6 +839,8 @@ condition_variable:  consumer: cv.wait(lock, []{ return !q.empty(); });
         <a href="https://google.github.io/googletest/" target="_blank" rel="noopener">GoogleTest user's guide</a>
         <a href="https://clang.llvm.org/docs/AddressSanitizer.html" target="_blank" rel="noopener">AddressSanitizer — Clang documentation</a>
         <a href="https://en.cppreference.com/w/cpp/thread" target="_blank" rel="noopener">Concurrency support library — cppreference</a>
+        <a href="https://en.cppreference.com/w/cpp/atomic/memory_order" target="_blank" rel="noopener">Atomic memory ordering — cppreference</a>
+        <a href="https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#S-concurrency" target="_blank" rel="noopener">Concurrency rules — C++ Core Guidelines</a>
       </div>
 
       <h3 class="sub">Practice questions</h3>
@@ -643,7 +869,7 @@ condition_variable:  consumer: cv.wait(lock, []{ return !q.empty(); });
   </main>
 
   <footer>
-    <p>Last updated: 2026-07-05. Styles shared with the Isaac Sim study hub.</p>
+    <p>Last updated: 2026-07-11. Styles shared with the Isaac Sim study hub.</p>
   </footer>
 
 <script src="quiz-data.js"></script>
@@ -873,7 +1099,8 @@ function renderAll() {
 const toggleBtn = document.getElementById("toggle-explain");
 toggleBtn.addEventListener("click", () => {
   const on = document.getElementById("main").classList.toggle("show-all");
-  toggleBtn.textContent = on ? "Hide explanations" : "Show all explanations";
+  toggleBtn.setAttribute("aria-pressed", String(on));
+  toggleBtn.textContent = on ? "Hide answers & explanations" : "Show answers & explanations";
 });
 
 document.getElementById("retry").addEventListener("click", renderAll);

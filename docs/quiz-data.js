@@ -841,7 +841,7 @@ const quizData = {
     {
       q: "What does ThreadSanitizer (TSan) detect, and what is the main operational caveat?",
       options: [
-        ["Data races and some deadlocks — but only in code that actually executes under it, so its power multiplies with test coverage and realistic concurrency in tests", true],
+        ["Data races in code that actually executes under it, so its power multiplies with test coverage and realistic concurrency in tests", true],
         ["All race conditions statically, without running the program", false],
         ["Memory leaks in multithreaded programs", false],
         ["CPU contention and false sharing", false]
@@ -911,12 +911,12 @@ const quizData = {
     {
       q: "What exactly makes two threads' access to the same int a data race, and what is the consequence?",
       options: [
-        ["Conflicting access (at least one write) with no synchronization ordering them — and it is undefined behavior, not merely stale data: the optimizer may reorder, merge, or delete the accesses", true],
+        ["Conflicting accesses with at least one write, at least one access non-atomic, and no happens-before ordering — undefined behavior, not merely stale data", true],
         ["Any concurrent read of shared data, which loses updates", false],
         ["It is safe as long as the variable fits in one machine word", false],
         ["A race only occurs if the threads run on different cores", false]
       ],
-      explain: "The C++ memory model gives unsynchronized conflicting accesses no semantics at all. 'It is just an int, worst case I read an old value' is folklore: compilers legally cache values in registers, fuse writes, and assume no other thread interferes. Concurrent reads of immutable data are fine. Fixes: std::atomic for the lone flag/counter, a mutex for multi-step invariants."
+      explain: "The C++ memory model gives a data race no semantics at all. 'It is just an int, worst case I read an old value' is folklore: compilers legally cache values in registers, fuse writes, and assume no other thread interferes. The modifying access need not be the non-atomic one—for example, an atomic_ref write conflicting with an ordinary read can still race. Concurrent reads of immutable data are fine. Fixes: a suitable atomic protocol or a mutex-protected invariant."
     },
     {
       q: "Where does a std::mutex idiomatically live, and how is it locked?",
@@ -931,22 +931,22 @@ const quizData = {
     {
       q: "Multiple threads increment a shared counter. When is std::atomic<int> the right tool rather than a mutex?",
       options: [
-        ["When the shared state is that single variable — fetch_add is one indivisible, lock-free operation; the moment an invariant spans multiple variables or steps, use a mutex", true],
+        ["When the invariant is exactly that one counter — fetch_add is one indivisible transition; default to a mutex when the invariant cannot be represented by one clear atomic state/protocol", true],
         ["Never — atomics are always slower than mutexes", false],
         ["Whenever more than two threads are involved", false],
         ["atomic<int> is only for read-only data", false]
       ],
-      explain: "counter.fetch_add(1) (or ++counter) is race-free and cheap — right for counters, flags, sequence numbers. But atomics compose badly: 'if (count.load() < max) count++' is a check-then-act race even though each piece is atomic. Invariants across several operations or objects need mutual exclusion. Default to seq_cst ordering; relaxed/acquire-release is expert territory with real payoffs only on hot paths."
+      explain: "counter.fetch_add(1) (or ++counter) is race-free and often cheap—right for counters, flags, and sequence numbers. It is not guaranteed lock-free; query is_lock_free when progress matters. Atomics do not compose automatically: 'if (count.load() < max) count++' is a check-then-act race, though a compare-exchange loop can encode that one-value transition. Once independently accessed fields, containers, rollback, or a larger invariant enter the rule, a mutex is usually clearer. Use seq_cst as the safest default; weaken ordering only with a proof and measured need."
     },
     {
-      q: "Why must condition_variable::wait always be called with a predicate — cv.wait(lock, []{ return !queue.empty(); })?",
+      q: "Why must condition_variable::wait re-check protected state — for example, cv.wait(lock, [&]{ return !queue.empty(); })?",
       options: [
         ["Wakeups can be spurious or stale (another consumer took the item), so the condition must be re-checked under the lock after every wakeup; the predicate form does exactly that", true],
         ["The predicate tells the scheduler which thread to wake first", false],
         ["Without a predicate the wait cannot time out", false],
         ["It is a style preference; plain wait(lock) is equivalent", false]
       ],
-      explain: "The pattern is state + mutex + cv: waiters sleep until notified, then MUST re-verify the state because (a) spurious wakeups are permitted and (b) between notify and waking, another thread may have consumed the condition. The predicate overload loops internally: while (!pred()) wait(lock). Producers change state under the mutex, then notify_one/all. Plain wait without a loop is a latent bug."
+      explain: "The pattern is state + mutex + cv: waiters sleep until notified, then MUST re-verify the state because (a) spurious wakeups are permitted and (b) between notify and waking, another thread may have consumed the condition. The predicate overload loops internally; an explicit while loop around plain wait is equivalent. Producers change state under the mutex, then notify_one/all. A bare wait without re-checking is a latent bug."
     },
     {
       q: "When are exceptions the right error mechanism versus std::optional/std::expected return types?",
@@ -972,12 +972,12 @@ const quizData = {
       level: "senior",
       q: "Two services deadlock: thread A holds mutex M1 wanting M2; thread B holds M2 wanting M1. What is the structural fix?",
       options: [
-        ["A global lock-ordering discipline — all code acquires M1 before M2 — and where two must be taken together, std::scoped_lock(m1, m2) acquires both atomically with a deadlock-avoidance algorithm", true],
+        ["A global lock-ordering discipline — all code acquires M1 before M2 — and where both are required together, std::scoped_lock(m1, m2) uses a deadlock-avoidance algorithm", true],
         ["Add a third mutex guarding the other two", false],
         ["Use try_lock in a retry loop until both succeed", false],
         ["Give each thread its own copy of both mutexes", false]
       ],
-      explain: "Deadlock's classic recipe is inconsistent acquisition order; the cure is a documented hierarchy (order by address, by layer, by rank) plus scoped_lock's multi-mutex form for the take-two-at-once case (it uses std::lock's avoidance algorithm). try_lock spin loops trade deadlock for livelock and burnt CPU. Structural alternatives that remove the problem: merge the two datasets under one mutex, or redesign so no path needs both."
+      explain: "Deadlock's classic recipe is inconsistent acquisition order; the cure is a documented hierarchy (by layer or explicit rank) plus scoped_lock's multi-mutex form when a set is required together. Its deadlock-avoidance sequence is not simultaneous atomic acquisition and cannot prevent cycles involving other locks or callbacks. try_lock spin loops can trade deadlock for livelock and burnt CPU. Structural alternatives: merge the datasets under one mutex, or redesign so no path needs both."
     },
     {
       level: "senior",
@@ -991,6 +991,109 @@ const quizData = {
       explain: "Load-dependent, non-deterministic corruption with clean serial tests is the data-race signature: the interleaving that corrupts needs contention to occur. TSan detects the unsynchronized access pattern itself, not the lucky/unlucky outcome — so a stress test under TSan finds in minutes what log-reading cannot. The fix is then ordinary: identify the shared state, give it an owner, protect it (mutex/atomic) or stop sharing it."
     },
     {
+      q: "An exception leaves a scope while its local std::thread is still joinable. What does the thread's destructor do?",
+      options: [
+        ["Calls std::terminate — every std::thread ownership path must join or detach; scoped std::jthread is usually safer because its destructor requests stop and joins", true],
+        ["Joins automatically, just like std::jthread", false],
+        ["Detaches automatically and lets the thread finish in the background", false],
+        ["Leaks only the OS thread handle but lets stack unwinding continue", false]
+      ],
+      explain: "std::thread makes forgotten lifetime handling fail fast: destroying a joinable thread terminates the program. A manual join can also be skipped by exceptions, so wrap ownership or prefer C++20 jthread. jthread's stop request is cooperative—the function must observe its stop_token—and its destructor then joins. Detached threads are rarely a fix because their captured objects and process-shutdown lifetime become unstructured. An exception escaping the thread function itself also calls terminate unless caught inside that function."
+    },
+    {
+      q: "Why does condition_variable::wait use std::unique_lock<std::mutex> rather than std::lock_guard?",
+      options: [
+        ["wait must atomically release the mutex while sleeping and reacquire it before checking state; unique_lock supports that temporary unlock/relock ownership", true],
+        ["unique_lock makes the predicate execute without synchronization", false],
+        ["lock_guard works only with recursive_mutex", false],
+        ["unique_lock guarantees FIFO wakeup order", false]
+      ],
+      explain: "A waiter must not hold the mutex while asleep or the producer could never acquire it to make the predicate true. condition_variable::wait operates on a unique_lock so it can release the mutex as part of sleeping, reacquire it before return, and preserve RAII ownership. lock_guard deliberately exposes no unlock operation. There is no standard fairness or FIFO guarantee."
+    },
+    {
+      q: "Does std::atomic<int> guarantee that its operations are implemented lock-free on every C++ target?",
+      options: [
+        ["No — atomicity and ordering are guaranteed, but the implementation may use an internal lock; query is_lock_free() or is_always_lock_free when progress matters", true],
+        ["Yes — every specialization of std::atomic is required to map to one CPU instruction", false],
+        ["Yes, but only when memory_order_seq_cst is used", false],
+        ["It is lock-free whenever only two threads access it", false]
+      ],
+      explain: "Atomic describes semantics, not necessarily implementation. Lock-freedom depends on type, alignment, ABI, and target; atomic_flag is the standard primitive guaranteed to be lock-free, while other atomics expose is_lock_free/is_always_lock_free. Even a lock-free primitive does not make a larger algorithm lock-free—a spinlock built from atomic_flag is still blocking because a paused owner stops everyone."
+    },
+    {
+      q: "Two threads run 'if (slots.load() > 0) slots.fetch_sub(1);' on atomic<int> slots{1}. What can happen?",
+      options: [
+        ["Both can observe 1 and both decrement, producing -1; each operation is atomic but the check-and-update sequence is not", true],
+        ["Exactly one always decrements because every statement mentioning an atomic joins one transaction", false],
+        ["A data race occurs because load and fetch_sub use different atomic operations", false],
+        ["The compiler rejects the code unless a mutex is also present", false]
+      ],
+      explain: "Atomics prevent torn/conflicting accesses; they do not compose statements into a transaction. A single-variable conditional transition can use a compare_exchange loop, which retries when another thread changes the observed value. If the rule involves multiple fields, a container, rollback, or complex validation, a mutex is normally clearer and safer."
+    },
+    {
+      level: "senior",
+      q: "In a one-shot publication, a producer writes an ordinary Payload, never mutates it again, then release-stores true to atomic ready. A consumer acquire-loads true before reading Payload. What does that establish?",
+      options: [
+        ["The producer's writes sequenced before the release happen-before the consumer's reads sequenced after the acquire, so the published Payload is visible", true],
+        ["Payload becomes atomic and may be concurrently modified forever", false],
+        ["Every operation in every thread joins one global transaction", false],
+        ["Only compiler reordering is affected; CPU visibility is unrelated", false]
+      ],
+      explain: "When the acquire observes the value written by the release (or its release sequence), it synchronizes-with that release and carries earlier writes across the happens-before edge. relaxed ready operations would keep ready race-free but would not publish the non-atomic Payload. seq_cst would also work and is the safest default; acquire/release is a deliberate weaker protocol, not a general speed switch. This proof relies on one-shot immutable-after-publish data—later payload writes need a new synchronization protocol."
+    },
+    {
+      q: "A queue's try_pop() takes a normal mutex, checks for an item, and returns immediately when the queue is empty. Is the operation lock-free?",
+      options: [
+        ["No — it does not wait for an item, but it can wait to acquire the mutex; non-waiting API behavior and lock-free progress are different properties", true],
+        ["Yes — every function beginning with try is lock-free by convention", false],
+        ["Yes — a mutex is lock-free whenever the critical section contains no loop", false],
+        ["No, because any function returning optional is a blocking operation", false]
+      ],
+      explain: "'Returns when empty' specifies queue semantics. Lock-free specifies system-wide progress even when an operation stalls. A mutex-backed try_pop is often a perfectly good API, but a paused lock owner can block every caller. Using mutex::try_lock would avoid waiting for the lock, yet then one result must distinguish busy from empty; it still does not turn the underlying queue into a lock-free algorithm."
+    },
+    {
+      level: "senior",
+      q: "What is the key progress difference between a lock-free and a wait-free queue?",
+      options: [
+        ["Lock-free guarantees system-wide progress—some operation completes, though one thread may starve; wait-free bounds the steps for every operation", true],
+        ["Lock-free means no mutex type appears in source; wait-free means callers use a timeout", false],
+        ["Lock-free guarantees FIFO fairness; wait-free guarantees only LIFO order", false],
+        ["They are synonyms in the C++ memory model", false]
+      ],
+      explain: "Progress and correctness are separate axes. A queue may be linearizable yet blocking, or lock-free yet unfair. Lock-free CAS retry loops allow individual starvation while ensuring contention cannot stop the whole system. Wait-free is stronger: each operation finishes within a bound on its own steps. Neither label guarantees the best throughput or latency on a real workload."
+    },
+    {
+      q: "A bounded queue has consumers waiting for not-empty and producers waiting for not-full. What must close() do for clean shutdown?",
+      options: [
+        ["Set a closed flag under the queue mutex, make both wait predicates include closed, notify all consumer and producer waiters, and define whether queued items drain", true],
+        ["Destroy the queue; blocked operations will detect the dangling object and return", false],
+        ["Send one sentinel item regardless of the number of consumers and producers", false],
+        ["Call notify_all without changing protected state; notifications are remembered until every future waiter sees them", false]
+      ],
+      explain: "Condition variables do not store events—the mutex-protected state is authoritative. Consumers commonly wait for closed || !empty, drain existing items, then return a closed result; blocked producers wake and fail once closed. Both wait sets need notification. The owner closes first, then joins every worker, and only then destroys the queue. Sentinels can work under a carefully specified protocol but are not a universal MPMC shutdown mechanism."
+    },
+    {
+      q: "The bounded ring example keeps atomic head and tail indexes but performs no CAS. Under which topology is that design valid?",
+      options: [
+        ["Exactly one producer and one consumer (SPSC), so only one thread writes each index and release/acquire publishes or frees each slot", true],
+        ["Any number of producers and consumers because the indexes themselves are atomic", false],
+        ["Multiple producers but no consumers", false],
+        ["Only when producer and consumer run on the same CPU core", false]
+      ],
+      explain: "The ownership of each index is part of the SPSC proof. With two producers, both can load the same head and write the same slot; atomic loads and stores do not reserve a unique position. MPSC/MPMC algorithms need a different protocol, commonly CAS or per-slot sequence numbers, plus careful lifetime handling. Topology is a correctness requirement, not merely a tuning choice."
+    },
+    {
+      level: "senior",
+      q: "Why is a linked lock-free MPMC queue much harder than making head and tail pointers atomic?",
+      options: [
+        ["Readers can outlive removed nodes, requiring safe reclamation, while A→B→A pointer changes can fool CAS, requiring separate ABA prevention or an algorithm-specific proof", true],
+        ["Atomic pointers cannot be compared or exchanged in C++", false],
+        ["Linked queues are required to allocate every node on the stack", false],
+        ["The only extra problem is choosing between notify_one and notify_all", false]
+      ],
+      explain: "Two problems interact but are distinct. Reclamation: if A retains pointer P while B removes and frees that node, A may dereference dead storage; hazard pointers, epochs/QSBR, reference counting, or another scheme must keep it alive. ABA: a value can change A→B→A—even through removal and reinsertion without freeing—so A's compare-exchange sees the same bits and misses the intervening change; tags, sequence counters, or an algorithm-specific proof address that. A tag alone does not make reclaimed memory safe, and a lifetime scheme alone is not automatically an ABA proof. Prefer a tested MPMC implementation unless this complexity is genuinely required."
+    },
+    {
       type: "multi",
       q: "Which of these does AddressSanitizer detect? Select ALL that apply.",
       options: [
@@ -1001,6 +1104,18 @@ const quizData = {
         ["Signed integer overflow", false]
       ],
       explain: "ASan owns the memory-error family: out-of-bounds (heap, stack, globals), use-after-free/return/scope, double-free, plus leak reporting at exit. Races need TSan (and the two cannot run in one binary — separate CI jobs); arithmetic UB needs UBSan (which CAN combine with ASan, hence the standard ASan+UBSan job)."
+    },
+    {
+      type: "multi",
+      q: "Which statements about C++ synchronization are true? Select ALL that apply.",
+      options: [
+        ["fetch_add with memory_order_relaxed is race-free for an independent atomic counter", true],
+        ["Unlocking a mutex synchronizes with a later successful lock of that same mutex", true],
+        ["volatile makes an ordinary variable safe for one thread to write while another reads", false],
+        ["shared_ptr's synchronized reference count makes unsynchronized mutation of its pointee safe", false],
+        ["Every std::atomic<T> specialization is guaranteed lock-free", false]
+      ],
+      explain: "Relaxed still guarantees atomicity and a per-object modification order; it simply does not publish unrelated data. Mutex unlock-to-lock establishes synchronization for protected state. volatile is for special observable memory, not inter-thread coordination. shared_ptr protects ownership bookkeeping across distinct copies, not the pointee's fields (and concurrent mutation of the same shared_ptr object also needs synchronization or atomic<shared_ptr>). Atomic lock-freedom remains type/target dependent."
     },
     {
       level: "senior",
@@ -1078,8 +1193,20 @@ const quizData = {
     },
     {
       type: "code",
+      q: "A closeable queue must wake a consumer both for data and for shutdown. What completes the predicate?",
+      code: "std::unique_lock lock(mu);\ncv.wait(lock, [&] { return ____; });\nif (queue.empty()) return std::nullopt;  // closed and drained",
+      options: [
+        ["closed || !queue.empty()", true],
+        ["closed && !queue.empty()  (cannot wake for a closed, empty queue)", false],
+        ["!queue.empty()  (a closed, empty consumer can sleep forever)", false],
+        ["true  (never waits for either state change)", false]
+      ],
+      explain: "The consumer can proceed for either reason: an item exists, or shutdown means no future item will arrive. close() sets closed under the same mutex and calls notify_all; after wake, an empty queue therefore means closed-and-drained. A producer blocked on a bounded queue's not-full condition needs the same closed escape and its own notification."
+    },
+    {
+      type: "code",
       q: "A consumer thread must sleep until the queue has work. What completes the wait correctly?",
-      code: "std::unique_lock lock(mu);\ncv.wait(lock, ____);\nauto item = queue.front();  // must be safe here",
+      code: "std::unique_lock lock(mu);\ncv.wait(lock, ____);\nauto item = std::move(queue.front());\nqueue.pop();  // front + pop are one locked operation",
       options: [
         ["[&] { return !queue.empty(); }", true],
         ["[] { return true; }  (returns immediately — even when the queue is empty)", false],
