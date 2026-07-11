@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Study hub for C++ assessment preparation: the C++ language and memory model, object-oriented design, and application architecture with the toolchain and ecosystem.">
+  <meta name="description" content="C++ preparation hub for Outlier-style expert work: revision notes, 114 question drills, and realistic timed coding, debugging, code-review, concurrency, and rubric-writing labs.">
   <title>C++ Study Hub</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -17,6 +17,7 @@
       <a href="#summary">Summary</a>
       <a href="#documents">Documents</a>
       <a href="cpp-skills.html">C++ Skills</a>
+      <a href="assessment-labs.html">Timed Labs</a>
     </nav>
   </header>
 
@@ -25,11 +26,11 @@
       <div class="intro">
         <h2>Study Goal</h2>
         <p>
-          This site collects revision material for C++ software-engineering assessment work. The target skill
-          set: strong command of modern C++ including the memory model and RAII, object-oriented design, and
-          application architecture, plus experience with the common C++ toolchain — build systems, testing,
-          sanitizers, and the standard library. Each area pairs a definitions list and core-concept notes with
-          a bank of multiple-choice practice questions and explanations.
+          This site is a training environment for preparing for C++ expert assessments and completing Outlier-style
+          coding work. It combines modern C++ knowledge — the memory model, RAII, object-oriented design,
+          architecture, testing, sanitizers, and the standard library — with realistic timed implementation,
+          debugging, code-review, response-ranking, concurrency, and rubric-writing practice. The exercises are
+          original and role-aligned; they are not copied from or guaranteed to match a private assessment.
         </p>
       </div>
 
@@ -54,6 +55,11 @@
           <h3>Question Drills</h3>
           <p>114 questions in four formats — single answer, select-all-that-apply, click-the-steps-in-order design chains, and fill-in-the-blank code snippets — including a tagged senior/principal tier (production diagnosis, ABI evolution, concurrency tradeoffs). Per-section and overall scores, show-all toggle, reshuffling retry. Works offline.</p>
         </article>
+        <article class="mini-card">
+          <span class="status good">Timed practice</span>
+          <h3>Realistic Coding &amp; Debugging Labs</h3>
+          <p>Eight original tasks, 165-minute full-mock mode, saved drafts, locked reference answers, hidden edge cases, and a 100-point evidence-based rubric. Includes atomics vs mutexes, a closeable MPMC queue, deadlock repair, API lifetime bugs, response evaluation, and implementation.</p>
+        </article>
       </div>
     </section>
 
@@ -68,12 +74,16 @@
           <strong>C++ Skills Revision and MCQ Practice</strong>
           <span>Definitions, core-concept cards, SVG diagrams of the compilation pipeline, virtual dispatch, exception unwinding, dependency inversion, and concurrency tradeoffs, code walkthroughs of move semantics, RAII, mutexes, atomics, and queues, further-reading links, and 114 practice questions in four formats (single answer, multi-select, step ordering, fill-in-the-blank code) — including a senior/principal tier — across the C++ language, object-oriented design, and application architecture.</span>
         </a>
+        <a class="doc-link featured" href="assessment-labs.html">
+          <strong>Timed C++ Coding &amp; Debugging Labs</strong>
+          <span>Take individual timed tasks or a 165-minute full mock spanning code ranking, lifetime debugging, LRU implementation, atomic compare-exchange, mutex-protected queues, deadlock repair, answer-and-rubric evaluation, and data aggregation. Drafts persist locally; solutions and scoring rubrics unlock after submission or expiry.</span>
+        </a>
       </div>
     </section>
   </main>
 
   <footer>
-    <p>Last updated: 2026-07-11. Styles shared with the Isaac Sim study hub.</p>
+    <p>Last updated: 2026-07-11.</p>
   </footer>
 </body>
 </html>

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Original Outlier-role-aligned C++ assessment practice with timed coding, debugging, code-review, response-ranking, and rubric-writing tasks.">
+  <title>Timed C++ Assessment Labs</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="assessment-labs.css">
+  <script defer src="assessment-labs-data.js"></script>
+  <script defer src="assessment-labs.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">C++ assessment training</p>
+      <h1>Timed Coding &amp; Debugging Labs</h1>
+    </div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Hub</a>
+      <a href="cpp-skills.html">C++ Skills</a>
+      <a href="#practice-plan">Practice Plan</a>
+      <a href="#lab-app">Timed Labs</a>
+      <a href="#sources">Sources</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="section hero-grid">
+      <div class="intro">
+        <p class="eyebrow">Train for the work, not trivia</p>
+        <h2>Practice a representative, role-aligned workflow under time pressure</h2>
+        <p>
+          These labs train the skills described in Outlier's public coding-role pages: review AI-generated code,
+          debug correctness and quality failures, rank competing responses, write precise technical questions,
+          create objective rubrics, and communicate a defensible answer. The C++ scenarios are deliberately
+          production-shaped: ownership, iterator validity, atomics, shutdown, multiple locks, containers, tests,
+          complexity, and edge cases.
+        </p>
+        <div class="actions">
+          <a class="button" href="#lab-app">Choose a timed task</a>
+          <a class="button secondary" href="#practice-plan">Read the practice strategy</a>
+        </div>
+      </div>
+      <aside class="practice-summary" aria-label="Practice suite summary">
+        <div><strong>8</strong><span>original tasks</span></div>
+        <div><strong>165</strong><span>full-mock minutes</span></div>
+        <div><strong>100</strong><span>rubric points</span></div>
+        <div><strong>75+</strong><span>practice target*</span></div>
+      </aside>
+    </section>
+
+    <section class="section notice" aria-labelledby="scope-title">
+      <h2 id="scope-title">Important scope</h2>
+      <p>
+        These are original, assessment-style exercises based on competencies described in public Outlier role
+        pages. They are not copied from, endorsed by, or guaranteed to match any private assessment. The timer,
+        165-minute mock, and 75-point target are study devices. Outlier's public pages do not disclose an exact
+        C++ format, timer, syllabus, allowed-tools policy, or pass mark; project requirements can vary.
+      </p>
+    </section>
+
+    <section id="practice-plan" class="section">
+      <h2>How to answer like a strong code expert</h2>
+      <div class="answer-framework">
+        <article><span>1</span><h3>Verdict</h3><p>State the result first: correct, incorrect, or best-to-worst ranking.</p></article>
+        <article><span>2</span><h3>Evidence</h3><p>Name the violated invariant and give a concrete failing interleaving or input.</p></article>
+        <article><span>3</span><h3>Repair</h3><p>Provide the smallest correct patch, with ownership and error behavior explicit.</p></article>
+        <article><span>4</span><h3>Tests</h3><p>Cover normal behavior, boundaries, adversarial cases, and the reported regression.</p></article>
+        <article><span>5</span><h3>Tradeoffs</h3><p>Explain complexity, lifetime, synchronization, maintainability, and assumptions.</p></article>
+      </div>
+      <div class="split plan-split">
+        <article>
+          <h3>Full mock: 165 minutes</h3>
+          <ol class="timeline">
+            <li><strong>First pass:</strong> read all prompts, mark constraints, and do not open hints.</li>
+            <li><strong>Execution:</strong> work in task order; stop when the master timer reaches zero.</li>
+            <li><strong>Review:</strong> reveal solutions only after submission or expiry.</li>
+            <li><strong>Scoring:</strong> award points only where your draft contains objective evidence.</li>
+          </ol>
+        </article>
+        <article>
+          <h3>Recommended weekly loop</h3>
+          <ul class="checklist">
+            <li>Day 1: one debugging task, then reproduce it under a sanitizer.</li>
+            <li>Day 2: one coding task with warnings-as-errors and edge tests.</li>
+            <li>Day 3: one response-review or rubric task, emphasizing concise writing.</li>
+            <li>Day 4: repeat the weakest task without hints.</li>
+            <li>Day 5: take the full mock and record the causes of every lost point.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="lab-app" class="section" aria-labelledby="lab-title">
+      <div class="section-heading-row">
+        <div>
+          <h2 id="lab-title">Timed practice workspace</h2>
+          <p class="section-note">
+            Drafts, timers, and self-scores stay in this browser. During a timed attempt the reference answer is
+            locked until you submit or time expires. Because this is a static site, the lock is an honor system;
+            compile and run your C++ locally with the command shown in each task.
+          </p>
+        </div>
+        <div class="suite-score" aria-live="polite">
+          <span>Suite self-score</span>
+          <strong id="suite-score">0 / 100</strong>
+          <small id="suite-progress">0 of 8 revealed</small>
+        </div>
+      </div>
+
+      <div class="timer-bar" id="timer-bar" data-state="idle">
+        <div>
+          <span class="timer-kicker" id="timer-kicker">Selected task</span>
+          <strong class="timer-display" id="timer-display" role="timer">00:00</strong>
+        </div>
+        <p id="timer-status">Choose a task and start when you are ready.</p>
+        <div class="timer-actions">
+          <button class="lab-button primary" id="full-mock" type="button">Reset all &amp; start 165-minute mock</button>
+          <button class="lab-button" id="reset-suite-score" type="button">Clear self-scores</button>
+        </div>
+      </div>
+
+      <div class="filter-row" role="group" aria-label="Filter tasks">
+        <button class="filter-button active" type="button" data-filter="all" aria-pressed="true">All tasks</button>
+        <button class="filter-button" type="button" data-filter="coding" aria-pressed="false">Coding</button>
+        <button class="filter-button" type="button" data-filter="debugging" aria-pressed="false">Debugging</button>
+        <button class="filter-button" type="button" data-filter="review" aria-pressed="false">Review &amp; evaluation</button>
+      </div>
+
+      <div class="lab-layout">
+        <aside class="task-sidebar" aria-label="Assessment tasks">
+          <div id="task-list"></div>
+        </aside>
+        <article class="workspace" id="workspace"></article>
+      </div>
+      <p class="sr-only" id="lab-announcer" aria-live="polite"></p>
+      <noscript>
+        <p class="notice">JavaScript is required for timers, saved drafts, answer locking, and self-scoring.</p>
+      </noscript>
+    </section>
+
+    <section class="section" id="local-setup">
+      <h2>Local C++ check</h2>
+      <p class="section-note">
+        Task blocks focus on the assessed logic and omit repetitive <code>#include</code> lines. Add the standard
+        headers named by the types you use; the common set below compiles all reference snippets when combined
+        with the relevant task declarations and a test <code>main</code>.
+      </p>
+      <div class="split">
+        <article>
+          <h3>GCC or Clang</h3>
+          <pre class="command-block">g++ -std=c++20 -Wall -Wextra -Werror -pedantic -g task.cpp &amp;&amp; ./a.out
+g++ -std=c++20 -g -O1 -fsanitize=address,undefined task.cpp &amp;&amp; ./a.out
+g++ -std=c++20 -g -O1 -fsanitize=thread task.cpp &amp;&amp; ./a.out</pre>
+        </article>
+        <article>
+          <h3>MSVC Developer Prompt</h3>
+          <pre class="command-block">cl /std:c++20 /permissive- /EHsc /W4 /WX task.cpp</pre>
+          <p class="section-note">Use a separate TSan-capable Clang/GCC environment for race detection.</p>
+        </article>
+      </div>
+      <details class="header-kit">
+        <summary>Common standard headers used by the labs</summary>
+        <pre class="command-block">#include &lt;algorithm&gt;
+#include &lt;atomic&gt;
+#include &lt;condition_variable&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;deque&gt;
+#include &lt;limits&gt;
+#include &lt;list&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+#include &lt;optional&gt;
+#include &lt;ranges&gt;
+#include &lt;span&gt;
+#include &lt;stdexcept&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;type_traits&gt;
+#include &lt;unordered_map&gt;
+#include &lt;unordered_set&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;</pre>
+      </details>
+    </section>
+
+    <section id="sources" class="section">
+      <h2>Why these task formats</h2>
+      <p class="section-note">
+        Public Outlier pages describe work such as reviewing and evaluating generated code, rating and ranking
+        responses, writing technical prompts and correct answers, creating grading rubrics, testing edge cases,
+        debugging, and providing clear engineering feedback. They do not publish an exact C++ assessment syllabus.
+      </p>
+      <div class="link-list">
+        <a href="https://outlier.ai/" target="_blank" rel="noopener">Outlier — common expert tasks</a>
+        <a href="https://outlier.ai/coding/code-quality/en-in" target="_blank" rel="noopener">Coding and code-quality role</a>
+        <a href="https://outlier.ai/coding/es-419" target="_blank" rel="noopener">QA coder role and assessment step</a>
+        <a href="https://outlier.ai/coding/fslc" target="_blank" rel="noopener">Engineering review/debugging role</a>
+        <a href="https://outlier.ai/faq" target="_blank" rel="noopener">Outlier FAQ</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Original C++ assessment practice. Last updated: 2026-07-11.</p>
+  </footer>
+</body>
+</html>
