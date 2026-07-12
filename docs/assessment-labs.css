@@ -225,6 +225,12 @@
   color: #ffffff;
 }
 
+@media (prefers-color-scheme: dark) {
+  .lab-button.primary {
+    color: #102018;
+  }
+}
+
 .lab-button.warning {
   border-color: var(--warn);
   color: var(--warn);

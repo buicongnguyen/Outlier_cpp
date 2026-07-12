@@ -22,6 +22,13 @@
           "Compare time and auxiliary-space complexity.",
           "Judge accuracy first, then instruction following and presentation quality."
         ],
+        thinkingPrompts: [
+          "What exactly is ordered: values, first occurrences, or second occurrences?",
+          "Which input information must every correct response preserve?",
+          "For one adversarial input, at which statement does each response return?",
+          "Which differences affect correctness, and which affect only performance or presentation?"
+        ],
+        reasoningHref: "reasoning-playbook.html#thinking-loop",
         starterCode: `// Treat each namespace as a separate response.
 // Response A
 namespace response_a {
@@ -76,10 +83,21 @@ std::optional<int> first_repeated(std::span<const int> values) {
         hint: "Sorting groups equal values, but ask what information is lost when the input order changes.",
         solutionText: [
           "Ranking: A, then C, then B.",
-          "A is correct and normally O(n) time with O(n) auxiliary space. Its unordered container has average-case rather than guaranteed linear behavior, which is worth naming without treating it as a correctness failure.",
+          "A is correct with average O(n) time and O(n) auxiliary space; pathological hashing can degrade it to worst-case O(n^2). That worst case is worth naming without treating it as a correctness failure.",
           "C is also correct because i is the candidate second occurrence and the inner loop checks whether that value appeared earlier. It uses O(1) auxiliary space but O(n^2) time.",
-          "B is incorrect: sorting destroys occurrence order. For {2, 2, 1, 1}, the required answer is 2 because its second occurrence is at index 1, while B sorts and returns 1. B is O(n log n) time and also copies the input."
+          "B is incorrect: sorting destroys occurrence order. For {2, 2, 1, 1}, the required answer is 2 because its second occurrence is at index 1, while B sorts and returns 1. B is O(n log n) time and O(n) auxiliary space for the copy."
         ],
+        answerDiagram: {
+          type: "flow",
+          title: "Why order preservation decides the ranking",
+          caption: "Trace the semantic information each response preserves before comparing complexity.",
+          steps: [
+            { label: "A: scan original order", detail: "The first failed set insertion is the earliest second occurrence." },
+            { label: "C: advance i chronologically", detail: "Searching only the prefix preserves the same return semantics." },
+            { label: "B: sort a copy", detail: "Sorting groups duplicates but destroys the temporal order required by the contract." },
+            { label: "Verdict", detail: "A is correct and efficient; C is correct but quadratic; B is incorrect." }
+          ]
+        },
         solutionCode: "",
         rubric: [
           { id: "t1-ranking", points: 2, text: "Ranks A > C > B." },
@@ -105,6 +123,13 @@ std::optional<int> first_repeated(std::span<const int> values) {
           "Fix duplicate insertion and keep the two containers consistent if an allocation throws.",
           "State the ownership tradeoff in the repaired representation."
         ],
+        thinkingPrompts: [
+          "Who owns every character buffer, and which objects merely observe it?",
+          "Which operations can relocate, copy, move, or destroy the observed storage?",
+          "What does a default Catalog copy do to the stored view addresses?",
+          "If the second container update throws, what state must be rolled back?"
+        ],
+        reasoningHref: "reasoning-playbook.html#ownership-data-flow",
         starterCode: `class Catalog {
 public:
     bool add(std::string name) {
@@ -143,6 +168,18 @@ private:
           "reserve() only delays vector growth and cannot make the default copy safe. The original add also appends before discovering a duplicate, and a later map allocation failure leaves names_ changed.",
           "Use owning std::string keys in the index. Insert the key first, append the value second, and erase the new map entry if the vector append throws. This duplicates name storage, but makes ownership and copy behavior straightforward. A more elaborate design could use stable owning nodes and custom copy logic, but it is not the smallest maintainable repair."
         ],
+        answerDiagram: {
+          type: "flow",
+          title: "Ownership failure and transactional repair",
+          caption: "The bug is a broken lifetime edge; the repair gives the index ownership and rolls back partial state.",
+          steps: [
+            { label: "View borrows characters", detail: "unordered_map<string_view> stores addresses into vector-owned strings." },
+            { label: "Reallocation or default copy", detail: "Reallocation can invalidate views; a copied Catalog preserves source addresses, which dangle when the source dies." },
+            { label: "Lookup later", detail: "The map reads invalid key memory and its invariant is no longer meaningful." },
+            { label: "Own the map key", detail: "unordered_map<string, index> gives each key an independent lifetime." },
+            { label: "Rollback on throw", detail: "Erase the provisional map entry if the vector append fails." }
+          ]
+        },
         solutionCode: `class Catalog {
 public:
     bool add(std::string name) {
@@ -185,7 +222,7 @@ private:
       {
         id: "implement-lru-cache",
         number: 3,
-        title: "Implement an O(1) LRU cache",
+        title: "Implement an average-O(1) LRU cache",
         kind: "coding",
         difficulty: "Intermediate",
         minutes: 25,
@@ -199,6 +236,13 @@ private:
           "Make copy behavior explicit because the map stores iterators into another member.",
           "Assume Key is copy-constructible, hashable, and equality-comparable; Value is copy-constructible and move-assignable; hash/equality operations do not throw."
         ],
+        thinkingPrompts: [
+          "Write the invariant that connects every map entry to exactly one list node.",
+          "Enumerate get hit/miss and put existing/new/full/capacity-zero transitions.",
+          "Which operation can move a node without invalidating its iterator?",
+          "What happens to stored iterators after a default copy or a throwing insertion?"
+        ],
+        reasoningHref: "reasoning-playbook.html#lru-data-flow",
         starterCode: `template <class Key, class Value>
 class LruCache {
 public:
@@ -224,7 +268,7 @@ private:
 };`,
         visibleTests: [
           "capacity 2: put(1,10), put(2,20), get(1), put(3,30) -> key 2 is evicted.",
-          "put an existing key -> size is unchanged and the new value is returned.",
+          "put an existing key -> size is unchanged and a subsequent get returns the new value.",
           "capacity 0: every put is ignored and every get returns std::nullopt."
         ],
         hiddenTests: [
@@ -239,6 +283,18 @@ private:
           "The insertion path rolls back the new list node if adding the map entry throws. Eviction occurs only after both structures contain the new item.",
           "This exercise requires copyable keys/values as used by the API and nonthrowing hash/equality. A throwing custom hash or equality function would require a separately specified weaker exception guarantee or a different representation for eviction."
         ],
+        answerDiagram: {
+          type: "flow",
+          title: "Map-to-list invariant and eviction trace",
+          caption: "The list owns entries in recency order; the map is only a fast index into stable nodes.",
+          steps: [
+            { label: "put(1)", detail: "List [1]; index 1 points to that node." },
+            { label: "put(2)", detail: "List [2, 1]; front is most recent." },
+            { label: "get(1)", detail: "splice node 1 to front without invalidating its iterator: [1, 2]." },
+            { label: "put(3)", detail: "Insert [3, 1, 2], then erase the back key and pop the LRU node." },
+            { label: "Copy boundary", detail: "Delete copying or rebuild every map iterator for the copied list." }
+          ]
+        },
         solutionCode: `template <class Key, class Value>
 class LruCache {
 public:
@@ -318,6 +374,13 @@ private:
           "Choose and justify memory order.",
           "Contrast this one-variable invariant with a multi-field account invariant."
         ],
+        thinkingPrompts: [
+          "Write the one-variable invariant before choosing a synchronization primitive.",
+          "Construct a two-thread trace between the eligibility check and the subtraction.",
+          "What observed value must be revalidated when another thread changes the balance?",
+          "Does this atomic publish any unrelated data, or protect only its own integer state?"
+        ],
+        reasoningHref: "reasoning-playbook.html#atomic-cas-loop",
         starterCode: `class Wallet {
 public:
     explicit Wallet(int cents) : cents_(cents) {}
@@ -347,15 +410,29 @@ private:
         hiddenTests: [
           "Many losing CAS attempts must re-check the newly observed balance.",
           "The implementation never transiently publishes a negative balance.",
-          "No unrelated data is assumed to become visible through this atomic."
+          "No unrelated data is assumed to become visible through this atomic.",
+          "Correctness does not claim lock-free or wait-free progress; those properties are separate and implementation/algorithm dependent."
         ],
         hint: "Make the condition and subtraction one conditional read-modify-write operation with a CAS loop.",
         solutionText: [
           "The load and fetch_sub are individually atomic but not one transaction. Two threads can both observe enough money before both subtract.",
           "A compare-exchange loop commits only if the balance still equals the value that passed the check. On failure, compare_exchange_weak writes the current balance into expected, so the loop naturally re-evaluates it.",
           "The constructor rejects a negative initial balance, so every public operation preserves the nonnegative invariant.",
-          "memory_order_relaxed is enough for this isolated integer invariant: atomicity and modification order are required, but the balance is not publishing other memory. Use a mutex when withdrawing must update a ledger, currency, timestamp, or several balances as one invariant; separate atomics cannot make a multi-object transaction."
+          "memory_order_relaxed is enough for this isolated integer invariant: atomicity and modification order are required, but the balance is not publishing other memory. Use a mutex when withdrawing must update a ledger, currency, timestamp, or several balances as one invariant; separate atomics cannot make a multi-object transaction.",
+          "Correctness from atomicity is separate from progress. std::atomic<int> is not guaranteed lock-free on every implementation, and even a lock-free CAS loop is not wait-free because one caller can repeatedly lose retries."
         ],
+        answerDiagram: {
+          type: "sequence",
+          title: "CAS retry interleaving",
+          caption: "CAS gives the successful state change one linearization point; a failed CAS updates expected for the next check.",
+          lanes: ["Thread A", "Atomic balance", "Thread B"],
+          rows: [
+            ["load expected = 100", "100", "load expected = 100"],
+            ["CAS 100 → 20 succeeds", "20", ""],
+            ["", "20", "CAS 100 → 20 fails; expected becomes 20"],
+            ["returns true", "20", "recheck 20 < 80; returns false"]
+          ]
+        },
         solutionCode: `class Wallet {
 public:
     explicit Wallet(int cents) : cents_(cents) {
@@ -415,6 +492,14 @@ private:
           "State the exception or type assumption needed when moving T out of the queue.",
           "State the safe lifecycle: close the queue, join every thread that can access it, then destroy it."
         ],
+        thinkingPrompts: [
+          "Enumerate open/closed crossed with empty/partial/full before writing any wait.",
+          "For push and pop, what predicate makes both progress and shutdown wakeups safe?",
+          "Which state mutation must happen under the mutex, and which waiter is notified afterward?",
+          "After close, which queued work remains valid and when may the object be destroyed?",
+          "Can any operation wait on a mutex or condition variable? What progress guarantee follows?"
+        ],
+        reasoningHref: "reasoning-playbook.html#queue-state-machine",
         starterCode: `template <class T>
 class BoundedQueue {
     static_assert(std::is_nothrow_move_constructible_v<T>,
@@ -463,6 +548,24 @@ private:
           "Moving T out can throw after modifying the front object. The reference constrains T to be nothrow move-constructible. Another production generic API must specify recovery or copy behavior.",
           "Shutdown protocol is separate from object lifetime: call close(), join every producer and consumer, and only then destroy the queue."
         ],
+        answerDiagram: {
+          type: "state",
+          title: "Bounded queue state machine",
+          caption: "close is a one-way transition; closed queues drain existing data but accept no new pushes.",
+          states: [
+            { id: "open-empty", label: "OPEN · EMPTY", detail: "pop waits; push creates data" },
+            { id: "open-partial", label: "OPEN · PARTIAL", detail: "push and pop can proceed" },
+            { id: "open-full", label: "OPEN · FULL", detail: "push waits; pop creates capacity" },
+            { id: "closed-draining", label: "CLOSED · DRAINING", detail: "push fails; pop returns queued items" },
+            { id: "closed-empty", label: "CLOSED · EMPTY", detail: "push fails; pop returns nullopt" }
+          ],
+          transitions: [
+            "push: open empty/partial → one more item; notify a consumer",
+            "pop: open/closed with data → one fewer item; notify a producer",
+            "close: any open state → closed state; notify all on both condition variables",
+            "last draining pop: closed draining → closed empty; no reopen transition"
+          ]
+        },
         solutionCode: `template <class T>
 class BoundedQueue {
     static_assert(std::is_nothrow_move_constructible_v<T>,
@@ -547,6 +650,13 @@ private:
           "Acquire both locks with a standard deadlock-avoidance facility.",
           "Keep account-state validation and both balance changes inside the critical section."
         ],
+        thinkingPrompts: [
+          "Use one resource-graph convention precisely: mutex → thread means ownership, and thread → mutex means waiting.",
+          "Can the edges form a cycle when callers reverse the account order?",
+          "Can from and to name the same non-recursive mutex?",
+          "Which validation depends on shared account state and therefore requires both locks?"
+        ],
+        reasoningHref: "reasoning-playbook.html#transfer-sequence",
         starterCode: `struct Account {
     std::int64_t balance;
     std::mutex mutex;
@@ -578,6 +688,18 @@ bool transfer(Account& from, Account& to, std::int64_t amount) {
           "Thread 1 can hold from=a and wait for b while thread 2 holds from=b and waits for a. That is circular wait. A self-transfer tries to lock the same non-recursive mutex twice in one thread.",
           "Reject self-transfer and non-positive input before locking, then use std::scoped_lock with both mutexes. The balance and overflow checks plus both mutations occur while both accounts are locked, preserving the joint invariant without undefined signed overflow."
         ],
+        answerDiagram: {
+          type: "sequence",
+          title: "ABBA wait cycle and repair boundary",
+          caption: "The broken version exposes partial lock ownership; scoped_lock acquires the mutex set with deadlock avoidance.",
+          lanes: ["Thread 1: A → B", "Lock state", "Thread 2: B → A"],
+          rows: [
+            ["locks A", "A owned by T1", "locks B"],
+            ["requests B and waits", "A owned by T1; B owned by T2", "requests A and waits"],
+            ["cannot progress", "cycle: T1 → B → T2 → A → T1", "cannot progress"],
+            ["repair: reject alias, scoped_lock(A,B)", "validate and update while both held", "same acquisition protocol"]
+          ]
+        },
         solutionCode: `bool transfer(Account& from, Account& to, std::int64_t amount) {
     if (amount <= 0 || std::addressof(from) == std::addressof(to)) {
         return false;
@@ -617,6 +739,13 @@ bool transfer(Account& from, Account& to, std::int64_t amount) {
           "Give at least two valid API redesigns with different ownership/performance tradeoffs.",
           "Write a 10-point rubric whose criteria can be checked without guessing intent."
         ],
+        thinkingPrompts: [
+          "For every returned view, which object owns the referenced elements?",
+          "At which exact statement or scope boundary can that owner die or invalidate storage?",
+          "Does the caller need independent ownership, caller-provided storage, or a documented borrowed view?",
+          "Can every rubric point be awarded from words or code actually present in the response?"
+        ],
+        reasoningHref: "reasoning-playbook.html#ownership-data-flow",
         starterCode: `std::span<const int> positive_values(std::span<const int> input) {
     std::vector<int> result;
     for (int value : input) {
@@ -649,6 +778,18 @@ bool transfer(Account& from, Account& to, std::int64_t amount) {
           "Small owning redesign: return std::vector<int>. Caller-provided-storage redesign: accept std::vector<int>& output or an output iterator. A lazy alternative is a ranges filter view over caller-owned input, but its validity remains tied to the caller's range and that borrowing contract must be explicit.",
           "Example objective rubric: 3 points for identifying destruction of result and the dangling span; 2 for stating span is non-owning and const does not extend lifetime; 2 for an owning vector return; 1 for a valid caller-owned/lazy alternative with lifetime constraints; 1 for rejecting reserve as a lifetime fix; 1 for clear verdict and edge-case discussion. The sample earns 0 because it meets none of these criteria. reserve can be a performance improvement in a safe owning redesign, but it cannot repair the returned view's lifetime."
         ],
+        answerDiagram: {
+          type: "flow",
+          title: "Returned-view lifetime trace",
+          caption: "Follow the owner through the return boundary before discussing constness or performance.",
+          steps: [
+            { label: "Construct local vector", detail: "result owns the filtered integer storage." },
+            { label: "Create returned span", detail: "span stores only an address and length; it owns nothing." },
+            { label: "Function returns", detail: "the local vector destructor releases its storage." },
+            { label: "Caller uses span", detail: "the address refers to dead storage; access is undefined behavior." },
+            { label: "Redesign", detail: "return an owning vector or make the caller-owned borrowing contract explicit." }
+          ]
+        },
         solutionCode: `std::vector<int> positive_values(std::span<const int> input) {
     std::vector<int> result;
     result.reserve(input.size());
@@ -684,6 +825,13 @@ bool transfer(Account& from, Account& to, std::int64_t amount) {
           "Avoid sorting all n occurrences when only u distinct codes are needed.",
           "State average-case assumptions behind unordered_map complexity and account for string hashing/copying costs."
         ],
+        thinkingPrompts: [
+          "Which tie-break metadata is lost if only final frequencies are retained?",
+          "What work belongs to n input occurrences and what belongs to u distinct codes?",
+          "Write the comparator keys and their directions before writing the comparator.",
+          "What must happen for k == 0, empty input, all-unique input, and k greater than u?"
+        ],
+        reasoningHref: "reasoning-playbook.html#algorithm-pipeline",
         starterCode: `std::vector<std::string> top_error_codes(
     std::span<const std::string> codes,
     std::size_t k) {
@@ -701,9 +849,21 @@ bool transfer(Account& from, Account& to, std::int64_t amount) {
         ],
         hint: "Record both count and first index per distinct code, then sort one row per distinct code with a two-key comparator.",
         solutionText: [
-          "The hash table records frequency and first position in one pass. A vector containing one row per distinct code is then sorted by count descending and first position ascending.",
+          "Return immediately for k == 0 or empty input. Otherwise, the hash table records frequency and first position in one pass. A vector containing one row per distinct code is then sorted by count descending and first position ascending.",
           "With bounded-length error codes and average O(1) hash-table operations, this is average O(n + u log u) time plus O(u) records. For variable-length strings, also account for the total characters hashed and copied; worst-case hash behavior is not guaranteed linear."
         ],
+        answerDiagram: {
+          type: "flow",
+          title: "Stable aggregation pipeline",
+          caption: "Keep the first index during aggregation so the final sort can reproduce the required tie order.",
+          steps: [
+            { label: "Read n occurrences", detail: "E2, E1, E2, E1, E3" },
+            { label: "Aggregate metadata", detail: "count and first index for each distinct code" },
+            { label: "Build u rows", detail: "E2:(2,0), E1:(2,1), E3:(1,4)" },
+            { label: "Sort composite key", detail: "count descending, then first index ascending" },
+            { label: "Take min(k,u)", detail: "return distinct codes without mutating input" }
+          ]
+        },
         solutionCode: `std::vector<std::string> top_error_codes(
     std::span<const std::string> codes,
     std::size_t k) {
@@ -716,6 +876,10 @@ bool transfer(Account& from, Account& to, std::int64_t amount) {
         std::size_t count;
         std::size_t first;
     };
+
+    if (k == 0 || codes.empty()) {
+        return {};
+    }
 
     std::unordered_map<std::string, Stat> stats;
     for (std::size_t i = 0; i < codes.size(); ++i) {

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A visual C++ problem-solving playbook for assessment work: reasoning flow, ownership data flow, CAS and lock sequences, queue state machines, algorithm pipelines, debugging decisions, and answer proof.">
+  <title>C++ Reasoning &amp; Diagram Playbook</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="reasoning-playbook.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">C++ assessment training</p>
+      <h1>Reasoning &amp; Diagram Playbook</h1>
+    </div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Hub</a>
+      <a href="cpp-skills.html">C++ Skills</a>
+      <a href="assessment-labs.html">Timed Labs</a>
+      <a href="#thinking-loop">Thinking Flow</a>
+      <a href="#debugging-decision">Debugging</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="section reasoning-hero">
+      <div class="reasoning-hero-copy">
+        <p class="eyebrow">See the proof before writing the patch</p>
+        <h2>Think in contracts, invariants, ownership, and state transitions</h2>
+        <p>
+          Strong C++ answers are not guesses about syntax. They are short proofs: define what must be true,
+          trace the data and state changes, find the first point where the invariant can fail, repair that point,
+          and choose tests that distinguish a correct solution from a plausible one.
+        </p>
+        <div class="actions">
+          <a class="button" href="#thinking-loop">Start with the thinking loop</a>
+          <a class="button secondary" href="assessment-labs.html">Apply it in timed labs</a>
+        </div>
+      </div>
+      <aside class="reasoning-summary" aria-label="Playbook contents">
+        <div><strong>10</strong><span>visual reasoning models</span></div>
+        <div><strong>8</strong><span>code/data/state models</span></div>
+        <div><strong>5</strong><span>proof moves per answer</span></div>
+        <div><strong>1</strong><span>repeatable debugging loop</span></div>
+      </aside>
+    </section>
+
+    <nav class="reasoning-toc section" aria-label="Reasoning playbook sections">
+      <a href="#thinking-loop">Universal loop</a>
+      <a href="#ownership-data-flow">Ownership</a>
+      <a href="#exception-transaction">Exceptions</a>
+      <a href="#lru-data-flow">LRU</a>
+      <a href="#atomic-cas-loop">Atomic CAS</a>
+      <a href="#transfer-sequence">Locks</a>
+      <a href="#queue-state-machine">Queue states</a>
+      <a href="#algorithm-pipeline">Algorithms</a>
+      <a href="#debugging-decision">Debugging</a>
+      <a href="#answer-proof">Answer proof</a>
+    </nav>
+
+    <section id="thinking-loop" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">Flow of thinking</p>
+        <h2>The universal assessment loop</h2>
+        <p>Do not choose a container, lock, or algorithm until the contract and invariant are explicit.</p>
+      </div>
+      <ol class="flow-chain flow-chain-wide" aria-label="Universal C++ assessment reasoning flow">
+        <li><span>1</span><strong>Contract</strong><small>Inputs, outputs, ordering, errors, complexity.</small></li>
+        <li><span>2</span><strong>Invariant</strong><small>What must remain true before and after every operation?</small></li>
+        <li><span>3</span><strong>Owners &amp; state</strong><small>Who owns bytes? What changes? What is shared?</small></li>
+        <li><span>4</span><strong>Small trace</strong><small>Use one adversarial input or thread interleaving.</small></li>
+        <li><span>5</span><strong>Representation</strong><small>Pick the simplest structure or primitive that proves the invariant.</small></li>
+        <li><span>6</span><strong>Repair</strong><small>Patch the first broken transition, not the visible symptom.</small></li>
+        <li><span>7</span><strong>Proof</strong><small>Tests, complexity, lifetime, exception, and concurrency assumptions.</small></li>
+      </ol>
+      <div class="reasoning-callout">
+        <strong>If a trace or test fails:</strong>
+        return to the invariant or representation. Adding another condition to the symptom usually creates a second bug.
+      </div>
+      <div class="model-grid three-models">
+        <article class="model-card">
+          <h3>Review task</h3>
+          <p>Build a contract matrix, find a decisive counterexample, rank correctness before performance, then judge clarity.</p>
+        </article>
+        <article class="model-card">
+          <h3>Debugging task</h3>
+          <p>Symptom → violated invariant → smallest failing trace → root cause → regression test.</p>
+        </article>
+        <article class="model-card">
+          <h3>Coding task</h3>
+          <p>Contract → state transitions → data structure → edge cases → complexity and exception guarantee.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="ownership-data-flow" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">Flow of data</p>
+        <h2>Ownership and lifetime: follow the bytes</h2>
+        <p>A pointer, reference, iterator, <code>span</code>, or <code>string_view</code> is safe only while its owner keeps the referenced storage valid.</p>
+      </div>
+      <div class="model-grid">
+        <article class="visual-card">
+          <h3>Unsafe borrowed-view flow</h3>
+          <ol class="data-flow" aria-label="A string view becomes dangling after vector growth">
+            <li class="data-node"><strong>Ownership chain</strong><span>Catalog → vector owns string objects → each string owns its character sequence</span></li>
+            <li class="data-node"><strong>Observer</strong><span><code>string_view</code> points at those characters</span></li>
+            <li class="data-node warning"><strong>Invalidating event</strong><span>element mutation/erase/destruction, or vector reallocation, invalidates observed storage</span></li>
+            <li class="data-node danger"><strong>Invalid view</strong><span>observer still holds the old address</span></li>
+            <li class="data-node danger"><strong>Later access</strong><span>undefined behavior or corrupt lookup</span></li>
+          </ol>
+        </article>
+        <article class="visual-card">
+          <h3>Ownership decision</h3>
+          <div class="decision-list">
+            <div><strong>Independent result lifetime?</strong><span>Return an owning value such as <code>vector</code> or <code>string</code>.</span></div>
+            <div><strong>Exclusive heap ownership?</strong><span>Use <code>unique_ptr</code> and move it.</span></div>
+            <div><strong>Genuinely shared lifetime?</strong><span>Use <code>shared_ptr</code>; break cycles with <code>weak_ptr</code>.</span></div>
+            <div><strong>Short borrowed access?</strong><span>Use a reference, pointer, <code>span</code>, or <code>string_view</code> with an explicit lifetime contract.</span></div>
+          </div>
+        </article>
+      </div>
+      <div class="question-strip">
+        <strong>Ask in order:</strong>
+        <span>Who owns the object?</span><span>When is it destroyed?</span><span>What can relocate it?</span><span>Who keeps an observer?</span>
+      </div>
+      <div class="reasoning-callout"><strong>Copy distinction:</strong> copying a vector does not invalidate its source. The Catalog failure occurs because a default copy duplicates <code>string_view</code> addresses instead of rebinding them to the copied strings; destroying the source then leaves the copy's views dangling.</div>
+    </section>
+
+    <section id="exception-transaction" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">State machine</p>
+        <h2>Strong-guarantee transaction pattern: prepare, commit, or roll back</h2>
+        <p>Every observable exit must meet its documented guarantee. The state flow below models the strong guarantee: failure has no observable effect.</p>
+      </div>
+      <div class="state-row" aria-label="Exception-safe transactional state flow">
+        <article class="state-node"><strong>Valid old state</strong><span>All invariants hold.</span></article>
+        <article class="state-node question"><strong>Prepare</strong><span>Perform work that may allocate or throw.</span></article>
+        <article class="state-node safe"><strong>Commit</strong><span>Use a small non-throwing state change.</span></article>
+        <article class="state-node"><strong>Valid new state</strong><span>All invariants hold again.</span></article>
+      </div>
+      <div class="rollback-path">
+        <strong>Throw during prepare</strong><span aria-hidden="true">→</span><span>RAII cleanup / erase provisional entry</span><span aria-hidden="true">→</span><strong>Valid old state</strong>
+      </div>
+      <div class="model-grid three-models guarantee-grid">
+        <article class="model-card"><h3>Basic guarantee</h3><p>After failure, invariants hold and resources are not leaked, but observable state may have changed.</p></article>
+        <article class="model-card safe-card"><h3>Strong guarantee</h3><p>Failure has no observable effect: the operation either completes or preserves the old state.</p></article>
+        <article class="model-card"><h3>No-throw guarantee</h3><p>The operation is guaranteed not to fail; destructors and commit primitives often need this property.</p></article>
+      </div>
+      <div class="model-grid">
+        <article class="model-card danger-card">
+          <h3>Partial update bug</h3>
+          <p><code>index.insert(key)</code> succeeds → <code>items.push_back</code> throws → index claims an item that does not exist.</p>
+        </article>
+        <article class="model-card safe-card">
+          <h3>Transactional repair</h3>
+          <p>Insert provisional key → try the second step → erase and rethrow on failure → expose success only after both structures agree.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="lru-data-flow" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">Structure and data flow</p>
+        <h2>LRU cache: one owner, one index, one recency order</h2>
+        <p>The list owns entries; the hash map stores iterators into stable list nodes.</p>
+      </div>
+      <div class="lru-structure" aria-label="LRU cache data structure">
+        <div class="lru-map"><strong>Hash index</strong><span>key 1 → node A</span><span>key 3 → node B</span><span>key 2 → node C</span></div>
+        <div class="lru-arrow" aria-hidden="true">→</div>
+        <div class="lru-list"><strong>Recency list</strong><span class="mru">MRU · 3</span><span>1</span><span class="lru">LRU · 2</span></div>
+      </div>
+      <ol class="flow-chain trace-chain" aria-label="LRU operation trace">
+        <li><strong><code>put(1)</code></strong><small>[1]</small></li>
+        <li><strong><code>put(2)</code></strong><small>[2, 1]</small></li>
+        <li><strong><code>get(1)</code></strong><small>[1, 2]</small></li>
+        <li><strong><code>put(3)</code></strong><small>[3, 1, 2]</small></li>
+        <li><strong>evict back</strong><small>[3, 1], remove key 2</small></li>
+      </ol>
+      <div class="reasoning-callout">
+        <strong>Copy trap:</strong> a default-copied hash map would retain iterators into the original list. Delete copying or rebuild the index.
+      </div>
+    </section>
+
+    <section id="atomic-cas-loop" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">Logic decision + sequence</p>
+        <h2>Atomic check-then-act: make the transition indivisible</h2>
+        <p>Atomic loads and updates do not automatically compose into one transaction.</p>
+      </div>
+      <div class="sequence-compare">
+        <figure class="sequence-card danger-card">
+          <figcaption>Broken: separate check and subtract</figcaption>
+          <div class="sequence-lanes three">
+            <strong>Thread A</strong><strong>Balance</strong><strong>Thread B</strong>
+            <span>load 100; 100 ≥ 80</span><span>100</span><span>load 100; 100 ≥ 80</span>
+            <span>subtract 80</span><span>20</span><span></span>
+            <span></span><span class="danger-text">−60</span><span>subtract 80</span>
+          </div>
+        </figure>
+        <figure class="sequence-card safe-card">
+          <figcaption>Correct: compare-exchange loop</figcaption>
+          <div class="sequence-lanes three">
+            <strong>Thread A</strong><strong>Atomic balance</strong><strong>Thread B</strong>
+            <span>expected = 100</span><span>100</span><span>expected = 100</span>
+            <span>CAS 100 → 20 succeeds</span><span>20</span><span></span>
+            <span></span><span>20</span><span>CAS fails; expected becomes 20</span>
+            <span></span><span>20</span><span>recheck: 20 &lt; 80 → false</span>
+          </div>
+        </figure>
+      </div>
+      <ol class="decision-flow" aria-label="Compare-exchange decision loop">
+        <li><strong>Load observed state</strong><span><code>current = balance.load()</code></span></li>
+        <li><strong>Invariant permits change?</strong><span>No → fail without mutation.</span></li>
+        <li><strong>CAS succeeds?</strong><span>Yes → this is the linearization point.</span></li>
+        <li><strong>CAS fails?</strong><span><code>current</code> receives the newer value; recompute and loop.</span></li>
+      </ol>
+      <div class="model-grid">
+        <article class="model-card"><h3>Choose an atomic</h3><p>One independently meaningful scalar fully represents the invariant, and one load/store/RMW/CAS expresses the transition.</p></article>
+        <article class="model-card"><h3>Choose a mutex</h3><p>Correctness spans multiple values, a container, throwing work, a ledger, or a blocking wait.</p></article>
+      </div>
+      <h3 class="submodel-title">Release/acquire publication is a data-flow proof</h3>
+      <ol class="data-flow" aria-label="Release acquire publication flow">
+        <li class="data-node"><strong>Producer</strong><span>write the payload</span></li>
+        <li class="data-node safe"><strong>Release store</strong><span><code>ready.store(true, std::memory_order_release)</code></span></li>
+        <li class="data-node safe"><strong>Synchronizes with</strong><span><code>ready.load(std::memory_order_acquire)</code> reads that released value</span></li>
+        <li class="data-node safe"><strong>Consumer</strong><span>payload writes now happen-before the read</span></li>
+      </ol>
+      <div class="reasoning-callout"><strong>Ordering heuristic:</strong> start with sequential consistency. Relaxed ordering preserves atomicity and the atomic object's modification order, but creates no happens-before edge for surrounding data; it fits the wallet because no payload is published.</div>
+      <h3 class="submodel-title">Synchronization decision</h3>
+      <div class="decision-list">
+        <div><strong>Can writable sharing be removed?</strong><span>Prefer immutable data, thread ownership, or message passing.</span></div>
+        <div><strong>Must an operation wait for work or capacity?</strong><span>Use a mutex-protected predicate with a condition variable, often behind a queue API.</span></div>
+        <div><strong>Does one atomic transition prove the complete invariant?</strong><span>Use an atomic load/store/RMW/CAS and state the memory-order proof.</span></div>
+        <div><strong>Does correctness span fields, containers, throwing work, or callbacks?</strong><span>Use a mutex and keep the protected invariant together with it.</span></div>
+        <div><strong>Measured need for lock-free progress?</strong><span>Only then accept topology, ABA, reclamation, and portability proof costs.</span></div>
+      </div>
+    </section>
+
+    <section id="transfer-sequence" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">Sequence diagram</p>
+        <h2>Multiple locks: see the wait-for cycle</h2>
+        <p>A deadlock is a graph cycle: each thread owns one resource and waits for the other.</p>
+      </div>
+      <figure class="sequence-card danger-card">
+        <figcaption>ABBA deadlock</figcaption>
+        <div class="sequence-lanes three">
+          <strong>Thread 1: A → B</strong><strong>Lock ownership</strong><strong>Thread 2: B → A</strong>
+          <span>lock A</span><span>A owned by T1</span><span>lock B</span>
+          <span>request B; wait</span><span class="danger-text">resource cycle: T1 → B → T2 → A → T1</span><span>request A; wait</span>
+          <span>cannot progress</span><span class="danger-text">cycle</span><span>cannot progress</span>
+        </div>
+      </figure>
+      <ol class="flow-chain trace-chain" aria-label="Deadlock-safe transfer reasoning">
+        <li><strong>Reject invalid input</strong><small>amount ≤ 0 or same account</small></li>
+        <li><strong>Acquire the set</strong><small><code>scoped_lock(A, B)</code></small></li>
+        <li><strong>Validate shared state</strong><small>funds and overflow while both locks are held</small></li>
+        <li><strong>Commit both changes</strong><small>preserve the total-balance invariant</small></li>
+        <li><strong>RAII unlock</strong><small>every return path releases both locks</small></li>
+      </ol>
+    </section>
+
+    <section id="queue-state-machine" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">State machine + sequence</p>
+        <h2>Closeable bounded queue: shutdown is part of the contract</h2>
+        <p>The protected state—not the notification—is the truth. Every wait rechecks a predicate while holding the mutex.</p>
+      </div>
+      <div class="queue-states" aria-label="Closeable bounded queue state machine">
+        <article><strong>OPEN · EMPTY</strong><span><code>pop</code> waits</span><span><code>push</code> → partial</span></article>
+        <article><strong>OPEN · PARTIAL</strong><span><code>push</code>/<code>pop</code> proceed</span><span>size stays within capacity</span></article>
+        <article><strong>OPEN · FULL</strong><span><code>push</code> waits</span><span><code>pop</code> → partial</span></article>
+        <article class="closing"><strong>CLOSED · DRAINING</strong><span>future pushes fail</span><span>existing items still pop</span></article>
+        <article class="terminal"><strong>CLOSED · EMPTY</strong><span><code>push</code> → false</span><span><code>pop</code> → nullopt</span></article>
+      </div>
+      <ul class="transition-list" aria-label="Queue transitions">
+        <li><strong>push:</strong> open empty/partial → one more item; notify one consumer.</li>
+        <li><strong>pop:</strong> open/closed with data → one fewer item; notify one producer.</li>
+        <li><strong>close:</strong> any open state → closed state; notify all producers and consumers.</li>
+        <li><strong>last draining pop:</strong> closed draining → closed empty; no reopen transition.</li>
+      </ul>
+      <figure class="sequence-card">
+        <figcaption>Condition-variable wait sequence</figcaption>
+        <div class="sequence-lanes four">
+          <strong>Consumer</strong><strong>Mutex / CV</strong><strong>Queue state</strong><strong>Producer</strong>
+          <span>lock; predicate false</span><span><code>wait</code> unlocks + sleeps</span><span>empty, open</span><span></span>
+          <span></span><span>mutex acquired</span><span>push item</span><span>lock → push → unlock → notify</span>
+          <span>wake and reacquire</span><span>predicate rechecked</span><span>nonempty</span><span></span>
+          <span>pop item</span><span>unlock; notify producer</span><span>empty</span><span></span>
+        </div>
+      </figure>
+      <div class="reasoning-callout"><strong>Progress classification:</strong> waiting on a mutex or condition variable makes this a blocking queue, not a lock-free or wait-free one.</div>
+    </section>
+
+    <section id="algorithm-pipeline" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">Algorithm and data pipeline</p>
+        <h2>Separate input occurrences from distinct result rows</h2>
+        <p>For ranked aggregation, preserve every piece of metadata needed by the comparator before reducing the data.</p>
+      </div>
+      <ol class="data-flow algorithm-flow" aria-label="Stable top error-code aggregation pipeline">
+        <li class="data-node"><strong>Input · n items</strong><span>E2, E1, E2, E1, E3</span></li>
+        <li class="data-node"><strong>Aggregate</strong><span>count + first index per code</span></li>
+        <li class="data-node"><strong>u rows</strong><span>E2:(2,0), E1:(2,1), E3:(1,4)</span></li>
+        <li class="data-node"><strong>Composite sort</strong><span>count ↓, then first index ↑</span></li>
+        <li class="data-node safe"><strong>Take min(k, u)</strong><span>deterministic distinct result</span></li>
+      </ol>
+      <div class="model-grid">
+        <article class="model-card"><h3>Comparator proof</h3><p>If counts differ, higher count comes first. Otherwise, lower first-occurrence index comes first.</p></article>
+        <article class="model-card"><h3>Complexity proof</h3><p>Average O(n) aggregation + O(u log u) sorting + O(u) records, with string hashing/copy costs stated separately.</p></article>
+      </div>
+    </section>
+
+    <section id="debugging-decision" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">Logic decision tree</p>
+        <h2>Choose evidence that matches the failure</h2>
+        <p>Tools confirm a hypothesis; they do not replace a contract, invariant, or minimal reproducer.</p>
+      </div>
+      <div class="debug-tree">
+        <article><strong>Compile diagnostic</strong><span>Read the first error; reduce templates; verify types and language mode.</span></article>
+        <article><strong>Link diagnostic</strong><span>Trace declarations, definitions, ODR, libraries, and CMake target edges.</span></article>
+        <article><strong>Wrong result</strong><span>Build the smallest counterexample; trace branches and state transitions.</span></article>
+        <article><strong>Crash / corruption</strong><span>Use ASan for out-of-bounds, use-after-free, invalid free, and related memory faults.</span></article>
+        <article><strong>Undefined operation</strong><span>Use UBSan for signed overflow, invalid shifts, null/alignment, and similar UB.</span></article>
+        <article><strong>Race / intermittent data</strong><span>Use TSan plus a controlled interleaving and shared-state inventory.</span></article>
+        <article><strong>Hang / deadlock</strong><span>TSan primarily detects data races and may report potential lock-order inversions. For an actual hang, use a timeout, all-thread stacks, and a wait-for graph.</span></article>
+        <article><strong>Unexpected mutation</strong><span>Use a debugger watchpoint to stop at the write that changes the invariant.</span></article>
+      </div>
+      <ol class="flow-chain debug-loop" aria-label="Evidence-driven debugging loop">
+        <li><strong>Reproduce</strong><small>Make failure observable.</small></li>
+        <li><strong>Minimize</strong><small>Remove irrelevant code and input.</small></li>
+        <li><strong>Classify</strong><small>Logic, lifetime, UB, race, hang, build.</small></li>
+        <li><strong>Instrument</strong><small>Choose the matching compiler/tool.</small></li>
+        <li><strong>Repair invariant</strong><small>Patch the earliest invalid transition.</small></li>
+        <li><strong>Regress</strong><small>Add the decisive test, then run the full suite.</small></li>
+      </ol>
+    </section>
+
+    <section id="answer-proof" class="section reasoning-section">
+      <div class="reasoning-heading">
+        <p class="eyebrow">Answer construction</p>
+        <h2>Turn the trace into a concise proof</h2>
+        <p>A strong response lets the reviewer verify every claim without guessing what you meant.</p>
+      </div>
+      <div class="proof-grid">
+        <article><span>1</span><strong>Verdict</strong><p>Correct, incorrect, or an explicit ranking.</p></article>
+        <article><span>2</span><strong>Evidence</strong><p>Violated invariant plus a concrete input or interleaving.</p></article>
+        <article><span>3</span><strong>Repair</strong><p>Smallest coherent code or design change.</p></article>
+        <article><span>4</span><strong>Tests</strong><p>Normal, boundary, adversarial, exception, and concurrency cases.</p></article>
+        <article><span>5</span><strong>Tradeoffs</strong><p>Complexity, ownership, invalidation, synchronization, assumptions.</p></article>
+      </div>
+      <pre class="answer-template">Verdict: ...
+
+Invariant / contract: ...
+Counterexample or interleaving: ...
+Root cause: ...
+Repair: ...
+Tests that prove it: ...
+Complexity and assumptions: ...</pre>
+    </section>
+
+    <section id="sources" class="section reasoning-section">
+      <h2>Authoritative references behind the models</h2>
+      <p class="section-note">The diagrams synthesize rules from the current C++ working draft, the C++ Core Guidelines, and official compiler/build documentation.</p>
+      <div class="link-list">
+        <a href="https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines.html" target="_blank" rel="noopener">C++ Core Guidelines — RAII, ownership, concurrency</a>
+        <a href="https://eel.is/c%2B%2Bdraft/basic.life" target="_blank" rel="noopener">C++ working draft — object lifetime</a>
+        <a href="https://eel.is/c%2B%2Bdraft/atomics.types.operations" target="_blank" rel="noopener">C++ working draft — atomic operations and CAS</a>
+        <a href="https://eel.is/c%2B%2Bdraft/thread.condition.condvar" target="_blank" rel="noopener">C++ working draft — condition variables</a>
+        <a href="https://eel.is/c%2B%2Bdraft/thread.lock.scoped" target="_blank" rel="noopener">C++ working draft — scoped_lock</a>
+        <a href="https://clang.llvm.org/docs/AddressSanitizer.html" target="_blank" rel="noopener">Clang AddressSanitizer</a>
+        <a href="https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html" target="_blank" rel="noopener">Clang UndefinedBehaviorSanitizer</a>
+        <a href="https://clang.llvm.org/docs/ThreadSanitizer.html" target="_blank" rel="noopener">Clang ThreadSanitizer</a>
+        <a href="https://cmake.org/cmake/help/latest/guide/tutorial/Testing%20and%20CTest.html" target="_blank" rel="noopener">CMake/CTest tutorial</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Original C++ reasoning diagrams for assessment practice. Last updated: 2026-07-13.</p>
+  </footer>
+</body>
+</html>

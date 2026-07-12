@@ -292,6 +292,107 @@
     parent.appendChild(panel);
   }
 
+  function renderThinkingCanvas(parent, task, showPlaybookLink) {
+    if (!Array.isArray(task.thinkingPrompts) || task.thinkingPrompts.length === 0) {
+      return;
+    }
+    const details = element("details", "reasoning-canvas");
+    details.appendChild(element("summary", "", "Reasoning canvas — questions only"));
+    const body = element("div", "reasoning-canvas-content");
+    body.appendChild(
+      element(
+        "p",
+        "",
+        "Use these prompts to build your model before coding. They guide the process without revealing the reference answer."
+      )
+    );
+    const list = element("ol");
+    for (const prompt of task.thinkingPrompts) {
+      list.appendChild(element("li", "", prompt));
+    }
+    body.appendChild(list);
+    if (showPlaybookLink && task.reasoningHref) {
+      const link = element("a", "reasoning-canvas-link", "Open the related visual model in a new tab");
+      link.href = task.reasoningHref;
+      link.target = "_blank";
+      link.rel = "noopener";
+      body.appendChild(link);
+    }
+    details.appendChild(body);
+    parent.appendChild(details);
+  }
+
+  function renderAnswerDiagram(parent, diagram) {
+    if (!diagram || !diagram.type || !diagram.title) {
+      return;
+    }
+    const details = element("details", "answer-diagram");
+    details.appendChild(element("summary", "", `Visual walkthrough — ${diagram.title}`));
+    const body = element("div", "answer-diagram-body");
+    if (diagram.caption) {
+      body.appendChild(element("p", "answer-diagram-caption", diagram.caption));
+    }
+
+    if (diagram.type === "flow" && Array.isArray(diagram.steps)) {
+      const flow = element("ol", "mini-flow");
+      for (const step of diagram.steps) {
+        const item = element("li");
+        item.appendChild(element("strong", "", step.label));
+        item.appendChild(element("span", "", step.detail));
+        flow.appendChild(item);
+      }
+      body.appendChild(flow);
+    } else if (diagram.type === "sequence" && Array.isArray(diagram.lanes) && Array.isArray(diagram.rows)) {
+      const wrap = element("div", "diagram-table-wrap");
+      const table = element("table", "diagram-table");
+      const head = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      const stepHeading = element("th", "", "Step");
+      stepHeading.scope = "col";
+      headRow.appendChild(stepHeading);
+      for (const lane of diagram.lanes) {
+        const laneHeading = element("th", "", lane);
+        laneHeading.scope = "col";
+        headRow.appendChild(laneHeading);
+      }
+      head.appendChild(headRow);
+      table.appendChild(head);
+      const bodyRows = document.createElement("tbody");
+      diagram.rows.forEach((row, index) => {
+        const tableRow = document.createElement("tr");
+        const rowHeading = element("th", "", String(index + 1));
+        rowHeading.scope = "row";
+        tableRow.appendChild(rowHeading);
+        for (const cell of row) {
+          tableRow.appendChild(element("td", "", cell || "—"));
+        }
+        bodyRows.appendChild(tableRow);
+      });
+      table.appendChild(bodyRows);
+      wrap.appendChild(table);
+      body.appendChild(wrap);
+    } else if (diagram.type === "state" && Array.isArray(diagram.states)) {
+      const states = element("div", "mini-state-grid");
+      for (const stateItem of diagram.states) {
+        const card = element("article");
+        card.appendChild(element("strong", "", stateItem.label));
+        card.appendChild(element("span", "", stateItem.detail));
+        states.appendChild(card);
+      }
+      body.appendChild(states);
+      if (Array.isArray(diagram.transitions)) {
+        const transitions = element("ul", "mini-transition-list");
+        for (const transition of diagram.transitions) {
+          transitions.appendChild(element("li", "", transition));
+        }
+        body.appendChild(transitions);
+      }
+    }
+
+    details.appendChild(body);
+    parent.appendChild(details);
+  }
+
   function renderAnswer(parent, task) {
     const taskState = state.tasks[task.id];
     const panel = element("section", "answer-panel");
@@ -312,6 +413,8 @@
       reasoning.appendChild(element("p", "", paragraph));
     }
     panel.appendChild(reasoning);
+
+    renderAnswerDiagram(panel, task.answerDiagram);
 
     if (task.solutionCode) {
       const solution = element("div", "solution-section");
@@ -464,6 +567,12 @@
 
     addHeading(workspace, "Deliverables", "h4");
     addList(workspace, task.instructions, "instruction-list");
+
+    renderThinkingCanvas(
+      workspace,
+      task,
+      taskState.status !== "running" && state.fullMock.status !== "running"
+    );
 
     addHeading(workspace, "Starter code / responses", "h4");
     addCodeBlock(workspace, task.starterCode, "starter code");

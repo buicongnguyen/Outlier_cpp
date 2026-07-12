@@ -230,6 +230,12 @@ tr:last-child td {
   border-color: var(--line);
 }
 
+@media (prefers-color-scheme: dark) {
+  .button:not(.secondary) {
+    color: #102018;
+  }
+}
+
 .course {
   padding: 18px;
   margin-bottom: 14px;
